@@ -45,12 +45,3 @@ repos:
     hooks:
     - id: black
       args: ['--line-length=120']
-
-#   - repo: local
-#     hooks:
-#       - id: pytest-check
-#         name: pytest-check
-#         entry: env SLOW_TESTS=False poetry run pytest tests
-#         language: system
-#         pass_filenames: false
-#         always_run: true
