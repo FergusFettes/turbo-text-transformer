@@ -1,4 +1,3 @@
-import yaml
 import datetime
 import logging
 from pathlib import Path

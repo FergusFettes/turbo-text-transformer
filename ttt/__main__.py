@@ -13,7 +13,9 @@ from ttt.models import BaseModel, OpenAIModel
 def main(model, prompt, number, list_models):
     # If there is no prompt, try to get it from stdin
     if not prompt:
-        prompt = click.get_text_stream("stdin").read()
+        prompt = click.get_text_stream("stdin").read().strip()
+        if not prompt:
+            return
 
     sink = click.get_text_stream("stdout")
 
