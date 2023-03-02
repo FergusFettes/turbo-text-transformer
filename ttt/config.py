@@ -1,7 +1,8 @@
-import yaml
 import datetime
 import logging
 from pathlib import Path
+
+import yaml
 
 file_path = Path("/tmp/ttt/")
 file_path.mkdir(parents=True, exist_ok=True)

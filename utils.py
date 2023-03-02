@@ -1,5 +1,6 @@
-import time
 import functools
+import time
+
 from ttt.config import logger
 
 
@@ -75,5 +76,3 @@ def retry(func=None, exception=Exception, n_tries=5, delay=0.1, backoff=2, logge
             raise exe
 
     return wrapper
-
-
