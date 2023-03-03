@@ -99,6 +99,14 @@ You can also tell it to output a formatted json file with the `-f json` flag. Th
 ttt -f json "The cat sat on the"
 ```
 
+and you can pipe txt in-- for example, I generated this readme with the following command:
+
+```
+cat pyproject.toml ttt/__main__.py | tttp -f readme | ttt -m gpt-3.5-turbo -f clear > README.md
+```
+
+If you want to input more text freely, just use it without a prompt and you can write or paste directly into stdin.
+
 ### Models
 
 Turbo Text Transformer includes support for text generation with all the openai models. Have a look at the model list with `ttt -l`.
