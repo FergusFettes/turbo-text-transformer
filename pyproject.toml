@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "turbo-text-transformer"
-version = "0.1.0"
+version = "0.1.1"
 description = ""
 authors = ["fergus <fergusfettes@gmail.com>"]
 readme = "README.md"
@@ -24,7 +24,7 @@ ttt = "ttt.__main__:main"
 
 [project]
 name = "turbo-text-transformer"
-version = "0.1.0"
+version = "0.1.1"
 
 [project.scripts]
 ttt = "ttt.__main__:main"
