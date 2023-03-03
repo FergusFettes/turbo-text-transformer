@@ -66,7 +66,6 @@ def get_prompt(prompt):
 @click.option("--max_tokens", "-M", help="Max number of tokens to return", default=None, type=int)
 def main(prompt, model, format, echo_prompt, list_models, **params):
     check_config()
-    prompt = get_prompt(prompt)
     options = {"params": prepare_engine_params(params, format), "format": format, "echo_prompt": echo_prompt}
 
     oam = OpenAIModel(model=model, **options)
@@ -74,6 +73,7 @@ def main(prompt, model, format, echo_prompt, list_models, **params):
         click.get_text_stream("stdout").write("\n".join(oam.list))
         return
 
+    prompt = get_prompt(prompt)
     sink = click.get_text_stream("stdout")
     if model in oam.list:
         sink.write(oam.gen(prompt))
