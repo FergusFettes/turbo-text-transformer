@@ -28,6 +28,8 @@ models:
 etc.
 ```
 
+The default config will be generated when you first try to use it.
+
 ## Installation
 
 To install Turbo Text Transformer, you can use pip:
@@ -46,10 +48,13 @@ poetry install
 
 ## Usage
 
-You can use Turbo Text Transformer by running the `ttt` command in your terminal:
-
-```sh
-ttt --model davinci --prompt "Hello, GPT-3!"
+```
+ttt [OPTIONS] PROMPT
+# or
+cat file.txt | ttt [OPTIONS]
+# or
+ttt [OPTIONS]
+# then paste into stdin
 ```
 
 The above example will generate text using the davinci model and the prompt "Hello, GPT-3!".
@@ -59,7 +64,6 @@ The above example will generate text using the davinci model and the prompt "Hel
 There are several options you can use with the `ttt` command:
 
 * `--model` or `-m`: The name of the model to use. Default is "davinci".
-* `--prompt` or `-p`: The prompt to use for text generation.
 * `--list_models` or `-l`: List available models.
 - `--echo_prompt, -e`: Whether to echo the prompt in the output.
 - `--format, -f FORMAT`: The format of the output. Can be "clean", "json", or "logprobs". Defaults to "clean".
@@ -69,7 +73,8 @@ There are several options you can use with the `ttt` command:
 
 ## Configuration
 
-Before using Turbo Text Transformer, you need to set up a configuration file. This should happen automatically when you run the `ttt` command for the first time:
+Before using Turbo Text Transformer, you need to set up a configuration file. This should happen automatically when you run the `ttt` command for the first time.
+
 This will create a configuration file in your home directory. You'll also be prompted to enter API keys for the transformer models you want to use. See the documentation for each model to learn how to obtain an API key.
 
 ## Examples
@@ -78,20 +83,22 @@ Here are some examples of how to use Turbo Text Transformer:
 
 ```
 # Generate text with the default model
-ttt -p "Once upon a time, there was a"
+ttt "Once upon a time, there was a"
 
 # Generate text with a specific model
-ttt -m gpt-2-medium "The meaning of life is"
+ttt -m text-davinci-003 "The meaning of life is"
 
 # Generate multiple completions
 ttt -n 5 "I like to eat"
 
 # Show logprobs
-ttt -L 1 "I like to eat"
+ttt "I like to eat" -f logprobs
 
 # Use the JSON format
 ttt -f json "I like to eat"
 ```
+
+If you put in the 'logprobs' flag, it will try to color the terminal output based on the logprobs. This is a bit janky at the moment.
 
 You can also tell it to output a formatted json file with the `-f json` flag. This is useful for piping into other programs.
 
