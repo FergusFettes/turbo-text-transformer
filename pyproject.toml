@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "turbo-text-transormer"
+name = "turbo-text-transformer"
 version = "0.1.0"
 description = ""
 authors = ["fergus <fergusfettes@gmail.com>"]
