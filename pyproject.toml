@@ -25,6 +25,10 @@ ttt = "ttt.__main__:main"
 [project]
 name = "turbo-text-transformer"
 version = "0.1.1"
+dynamic = ["dependencies"]
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
 
 [project.scripts]
 ttt = "ttt.__main__:main"
