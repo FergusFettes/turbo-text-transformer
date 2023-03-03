@@ -17,7 +17,6 @@ tiktoken = "^0.3.0"
 [tool.poetry.group.dev.dependencies]
 ipdb = "^0.13.11"
 ipython = "^8.11.0"
-turbo-text-transformer-prompts = {git = "ssh://git@github.com/fergusfettes/turbo-text-transformer-prompts", rev = "main"}
 memory-profiler = "^0.61.0"
 
 [tool.poetry.scripts]
