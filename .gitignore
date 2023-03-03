@@ -150,3 +150,4 @@ package/
 
 .tags
 *.csv
+_data/
