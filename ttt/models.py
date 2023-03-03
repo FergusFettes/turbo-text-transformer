@@ -9,7 +9,7 @@ import openai
 import yaml
 from colored import attr, bg, fg
 
-from ttt.config import config, config_dir
+from ttt.config import config, config_dir, encoding
 
 
 class ProbColors(Enum):
@@ -143,6 +143,15 @@ class OpenAIModel(BaseModel):
     _config: dict = field(default_factory=dict)
 
     chat_models: list = field(default_factory=lambda: ["gpt-3.5-turbo-0301", "gpt-3.5-turbo"])
+    large_models: list = field(
+        default_factory=lambda: [
+            "gpt-3.5-turbo",
+            "gpt-3.5-turbo-0301",
+            "text-davinci-003",
+            "text-davinci-002",
+            "code-davinci-002",
+        ]
+    )
 
     def __post_init__(self):
         self._config = yaml.load(self.path.read_text(), Loader=yaml.FullLoader)
@@ -174,10 +183,19 @@ class OpenAIModel(BaseModel):
         self.path.write_text(yaml.dump(self._config))
 
     def gen(self, prompt):
+        self.check_max_tokens(prompt)
         self._params["prompt"] = prompt
         if self._params["model"] in self.chat_models:
             return self.formatter.format_response(self._chat(prompt))
         return self.formatter.format_response(self._gen(prompt))
+
+    def check_max_tokens(self, prompt):
+        prompt_tokens = encoding.encode(prompt)
+        max_tokens = 4000 if self._params["model"] in self.large_models else 2048
+        if len(prompt_tokens) > max_tokens:
+            raise ValueError(f"Prompt is too long. Max tokens: {max_tokens}")
+        if len(prompt_tokens) + self._params["max_tokens"] > max_tokens:
+            self._params["max_tokens"] = max_tokens - len(prompt_tokens)
 
     def _gen(self, prompt):
         self._params["prompt"] = prompt
