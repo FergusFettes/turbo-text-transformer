@@ -2,6 +2,7 @@ import datetime
 import json
 from dataclasses import dataclass, field
 from enum import Enum
+from os import wait
 from pathlib import Path
 from typing import Optional
 
@@ -27,6 +28,7 @@ class ProbColors(Enum):
 class Formatter:
     operator: str
     format: str = config.get("format", "clean")
+    echo_prompt: bool = config.get("echo_prompt", False)
 
     def format_response(self, response):
         if self.operator == "OpenAI":
@@ -38,40 +40,54 @@ class Formatter:
             response = self._clean_json(response)
             return json.dumps(response, indent=4)
         if self.format == "logprobs":
-            return self._logprobs(response)
+            response = self._logprobs(response)
+        if self.echo_prompt:
+            return "\n".join([response["params"]["prompt"] + c["text"] for c in response["choices"]])
         return "\n".join([c["text"] for c in response["choices"]])
 
     def _clean_json(self, response):
-        for c in response["choices"]:
-            c["token_logprobs"] = c.get("logprobs", {}).get("token_logprobs", None)
-            c["logprob_offset"] = c.get("logprobs", {}).get("text_offset", None)
-            if c.get("logprobs", None):
-                del c["logprobs"]
-            if c.get("index", None):
-                del c["index"]
-
-            # If the first token is a newline, remove it
-            if len(c["text"]) == 0:
+        for choice in response["choices"]:
+            if "logprobs" not in choice:
                 continue
-            while c["text"][0] == "\n":
-                c["text"] = c["text"][1:]
-                # And drop the first token logprob
-                if c.get("token_logprobs", None):
-                    c["token_logprobs"] = c["token_logprobs"][1:]
-                    # And update the offsets
-                    c["logprob_offset"] = [offset - 1 for offset in c["logprob_offset"]]
-                    c["logprob_offset"] = c["logprob_offset"][1:]
+            if choice.get("logprobs", None) is None:
+                del choice["logprobs"]
+                del choice["index"]
+                continue
+
+            choice["token_logprobs"] = choice.get("logprobs", {}).get("token_logprobs", None)
+            choice["logprob_offset"] = choice.get("logprobs", {}).get("text_offset", None)
+            if choice.get("logprobs", None):
+                del choice["logprobs"]
+            if choice.get("index", None):
+                del choice["index"]
+
+            # # If the first token is a newline, remove it
+            # if len(choice["text"]) == 0:
+            #     continue
+            # while choice["text"][0] == "\n":
+            #     choice["text"] = choice["text"][1:]
+            #     # And drop the first token logprob
+            #     if choice.get("token_logprobs", None):
+            #         choice["token_logprobs"] = choice["token_logprobs"][1:]
+            #         # And update the offsets
+            #         choice["logprob_offset"] = [offset - 1 for offset in choice["logprob_offset"]]
+            #         choice["logprob_offset"] = choice["logprob_offset"][1:]
 
         return response
 
     def _logprobs(self, response):
         response = self._clean_json(response)
         prompt_offset = len(response["params"]["prompt"])
+        if response["choices"][0].get("token_logprobs", None) is None:
+            return response
+
         for c in response["choices"]:
-            c["colorized_tokens"] = self._colorize(
+            colorized = self._colorize(
                 c["text"], c["token_logprobs"], [offset - prompt_offset for offset in c["logprob_offset"]]
             )
-        return "\n".join([c["colorized_tokens"] for c in response["choices"]])
+            c["text"] = colorized
+
+        return response
 
     def _colorize(self, text, token_logprobs, offset):
         colorized_string = ""
@@ -114,12 +130,13 @@ class BaseModel:
     backup_path: Path = Path("/tmp/ttt/")
     params: dict = field(default_factory=dict)
     format: str = config.get("format", "clean")
+    echo_prompt: bool = config.get("echo_prompt", False)
 
     def __post_init__(self):
         self.backup_path.mkdir(parents=True, exist_ok=True)
         self.n = self.params.get("n", 1)
 
-        self.formatter = Formatter(operator=self.operator, format=self.format)
+        self.formatter = Formatter(operator=self.operator, format=self.format, echo_prompt=self.echo_prompt)
 
     @staticmethod
     def token_position(token, text_offset):
@@ -158,14 +175,13 @@ class OpenAIModel(BaseModel):
         if self._config.get("backup_path", None):
             self.backup_path = Path(self._config["backup_path"])
 
-        self._params = self._config["engine_params"]
+        self._params = self._config.get("engine_params", {})
         self._params.update(self.params)
         if self.model:
             self._params.update({"model": self.model})
-        self._list = self._config["models"]
-        self.api_key = self._config["api_key"]
+        self._list = self._config.get("models", [])
 
-        openai.api_key = self.api_key
+        openai.api_key = self._config.get("api_key", "")
 
         super().__post_init__()
 
@@ -193,8 +209,8 @@ class OpenAIModel(BaseModel):
         prompt_tokens = encoding.encode(prompt)
         max_tokens = 4000 if self._params["model"] in self.large_models else 2048
         if len(prompt_tokens) > max_tokens:
-            raise ValueError(f"Prompt is too long. Max tokens: {max_tokens}")
-        if len(prompt_tokens) + self._params["max_tokens"] > max_tokens:
+            raise ValueError(f"Prompt is too long. Max tokens: {max_tokens}. Prompt tokens: {len(prompt_tokens)}")
+        if len(prompt_tokens) + int(self._params["max_tokens"]) > max_tokens:
             self._params["max_tokens"] = max_tokens - len(prompt_tokens)
 
     def _gen(self, prompt):
@@ -218,6 +234,9 @@ class OpenAIModel(BaseModel):
         for c in response["choices"]:
             c["text"] = c["message"]["content"]
             del c["message"]
+        # Set the 'params'.'prompt' field to the 'params'.'messages'[0]'.'content' field
+        response["params"]["prompt"] = response["params"]["messages"][0]["content"]
+        del response["params"]["messages"]
 
         return response
 
@@ -227,6 +246,23 @@ class OpenAIModel(BaseModel):
 
         backup = self.backup_path / f"{timestamp}.json"
         backup.write_text(json.dumps(response, indent=4))
+
+    @staticmethod
+    def create_config(api_key):
+        path = config_dir / "openai.yaml"
+        from ttt.config import OPENAI_DEFAULT_PARAMS
+
+        config = {
+            "engine_params": OPENAI_DEFAULT_PARAMS,
+            "api_key": api_key,
+            "backup_path": str(BaseModel().backup_path),
+            "models": [],
+        }
+        path.write_text(yaml.dump(config))
+
+        model = OpenAIModel()
+        model.update_list()
+        model.save()
 
 
 @dataclass

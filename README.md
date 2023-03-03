@@ -60,42 +60,48 @@ There are several options you can use with the `ttt` command:
 
 * `--model` or `-m`: The name of the model to use. Default is "davinci".
 * `--prompt` or `-p`: The prompt to use for text generation.
-* `--number` or `-n`: The number of completions to generate. Default is 1.
 * `--list_models` or `-l`: List available models.
+- `--echo_prompt, -e`: Whether to echo the prompt in the output.
+- `--format, -f FORMAT`: The format of the output. Can be "clean", "json", or "logprobs". Defaults to "clean".
+- `--number, -n NUMBER`: The number of completions to generate. Defaults to 1.
+- `--logprobs, -L LOGPROBS`: Whether to show logprobs for each completion. Defaults to False.
+- `--max_tokens, -M MAX_TOKENS`: The maximum number of tokens to return. Defaults to None.
+
+## Configuration
+
+Before using Turbo Text Transformer, you need to set up a configuration file. This should happen automatically when you run the `ttt` command for the first time:
+This will create a configuration file in your home directory. You'll also be prompted to enter API keys for the transformer models you want to use. See the documentation for each model to learn how to obtain an API key.
+
+## Examples
+
+Here are some examples of how to use Turbo Text Transformer:
+
+```
+# Generate text with the default model
+ttt -p "Once upon a time, there was a"
+
+# Generate text with a specific model
+ttt -m gpt-2-medium "The meaning of life is"
+
+# Generate multiple completions
+ttt -n 5 "I like to eat"
+
+# Show logprobs
+ttt -L 1 "I like to eat"
+
+# Use the JSON format
+ttt -f json "I like to eat"
+```
+
+You can also tell it to output a formatted json file with the `-f json` flag. This is useful for piping into other programs.
+
+```
+ttt -f json "The cat sat on the"
+```
 
 ### Models
 
-Turbo Text Transformer includes support for several models:
-
-* `davinci`: The default model, provides highly coherent long-form text.
-* `babbage`: The best model for code completion and generation.
-* `ada`: The most capable model for natural language processing and generating highly coherent short-form text.
-* `curie`: A highly capable model for natural language processing and generating highly coherent short-form text.
-
-### Customization
-
-You can customize the behavior of Turbo Text Transformer by creating your own models. To do so, you can create a new Python file in the `ttt` directory and define it according to the following template:
-
-```python
-from ttt.models import BaseModel
-
-
-class MyModel(BaseModel):
-    model = "my_model"
-    completion_url = "https://api.openai.com/v1/completions"
-    operator = "OpenAI"
-    params = {
-        "model": model,
-        "max_tokens": 50,
-        "temperature": 0.5,
-    }
-
-    def gen(self, prompt):
-        # Your text generation logic here
-        return ["generated text"]
-```
-
-Replace `MyModel` with the name of your model and implement the `gen` method with your text generation logic. You can then use your model with the `--model` option.
+Turbo Text Transformer includes support for text generation with all the openai models. Have a look at the model list with `ttt -l`.
 
 ## Contributing
 
