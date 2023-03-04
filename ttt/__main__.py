@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 
 import click
+from ttt.chunker import Chunker
 
-from ttt.config import config_path, create_config, load_config
+from ttt.config import config_path, create_config, load_config, encoding
 from ttt.models import BaseModel, OpenAIModel
 
 
@@ -48,9 +49,22 @@ def get_prompt(prompt):
     return prompt
 
 
+def chunk(prompt, params):
+    prompt_tokens = encoding.encode(prompt)
+    max_tokens = 4000 if params["model"] in OpenAIModel.large_models else 2048
+    if len(prompt_tokens) > max_tokens:
+        click.echo(f"Prompt is too long. Max tokens: {max_tokens}. Prompt tokens: {len(prompt_tokens)}")
+        click.confirm("Do you want to chunk the prompt?", abort=True)
+        return Chunker(prompt, **params).chunk()
+
+    if len(prompt_tokens) + int(params["max_tokens"]) > max_tokens:
+        params["max_tokens"] = max_tokens - len(prompt_tokens)
+        click.echo(f"Prompt is too long. Max tokens adjusted: {max_tokens}. Prompt tokens: {len(prompt_tokens)}")
+    return [prompt]
+
+
 @click.command()
 @click.argument("prompt", required=False)
-@click.option("--model", "-m", help="Name of the model to use.", default="gpt-3.5-turbo-0301")
 @click.option(
     "--format",
     "-f",
@@ -59,25 +73,36 @@ def get_prompt(prompt):
     type=click.Choice(["clean", "json", "logprobs"]),
     show_default=True,
 )
-@click.option("--list_models", "-l", help="List available models.", is_flag=True, default=False)
 @click.option("--echo_prompt", "-e", help="List available models.", is_flag=True, default=False)
-@click.option("--number", "-n", help="Number of completions.", default=None, type=int)
+@click.option("--list_models", "-l", help="List available models.", is_flag=True, default=False)
+@click.option("--template_file", "-t", help="Template to apply to prompt.", default=None, type=str)
+@click.option("--chunk_size", "-c", help="Max size of chunks", default=None, type=int)
+@click.option("--summary_size", "-s", help="Size of chunk summaries", default=None, type=int)
+@click.option("--model", "-M", help="Name of the model to use.", default="gpt-3.5-turbo")
+@click.option("--number", "-N", help="Number of completions.", default=None, type=int)
 @click.option("--logprobs", "-L", help="Show logprobs for completion", default=None, type=int)
 @click.option("--max_tokens", "-M", help="Max number of tokens to return", default=None, type=int)
-def main(prompt, model, format, echo_prompt, list_models, **params):
+@click.option("--temperature", "-T", help="Temperature, [0, 2]-- 0 is deterministic, >0.9 is creative.", default=None, type=int)
+def main(prompt, format, echo_prompt, list_models, **params):
     check_config()
     options = {"params": prepare_engine_params(params, format), "format": format, "echo_prompt": echo_prompt}
 
-    oam = OpenAIModel(model=model, **options)
+    sink = click.get_text_stream("stdout")
+    oam = OpenAIModel(**options)
     if list_models:
-        click.get_text_stream("stdout").write("\n".join(oam.list))
+        sink.write("\n".join(oam.list))
         return
 
     prompt = get_prompt(prompt)
-    sink = click.get_text_stream("stdout")
-    if model in oam.list:
-        sink.write(oam.gen(prompt))
+    prompts = chunk(prompt)
+    if params["model"] in oam.list:
+        responses = [oam.gen(prompt) for prompt in prompts]
+        sink.write('\n'.join(responses))
         return
 
-    bm = BaseModel(model="test", **options)
-    sink.write(bm.gen(prompt))
+    if params["model"] == 'test':
+        bm = BaseModel(**options)
+        responses = [bm.gen(prompt) for prompt in prompts]
+        sink.write('\n'.join(responses))
+
+    click.echo("Model not found. Use the -l flag to list available models.", err=True, color="red")

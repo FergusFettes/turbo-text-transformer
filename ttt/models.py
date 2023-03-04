@@ -1,19 +1,19 @@
 import datetime
 import json
 from dataclasses import dataclass, field
-from enum import Enum
-from os import wait
 from pathlib import Path
 from typing import Optional
 
 import openai
 import yaml
 from colored import attr, bg, fg
+import click
 
-from ttt.config import config, config_dir, encoding
+from ttt.config import config, config_dir
 
 
-class ProbColors(Enum):
+@dataclass
+class ProbColors:
     # Colors of foreground and background for different probabilities
     prob_0 = (195, 196)
     prob_1 = (195, 202)
@@ -22,6 +22,22 @@ class ProbColors(Enum):
     prob_4 = (239, 226)
     prob_5 = (239, 76)
     prob_6 = (239, 82)
+
+    @staticmethod
+    def choose_color(logprob):
+        if logprob < -0.5:
+            return ProbColors.prob_0
+        if logprob < -0.4:
+            return ProbColors.prob_1
+        if logprob < -0.3:
+            return ProbColors.prob_2
+        if logprob < -0.2:
+            return ProbColors.prob_3
+        if logprob < -0.1:
+            return ProbColors.prob_4
+        if logprob < 0.01:
+            return ProbColors.prob_5
+        return ProbColors.prob_6
 
 
 @dataclass
@@ -95,24 +111,9 @@ class Formatter:
             start = offset[i]
             end = offset[i + 1] if i < len(offset) - 1 else len(text)
             # Start with a set of colors
-            fg_, bg_ = self.choose_color(logprob)
+            fg_, bg_ = ProbColors.choose_color(logprob)
             colorized_string += f"{bg(bg_)}{fg(fg_)}{text[start:end]}{attr(0)}"
         return colorized_string
-
-    def choose_color(self, logprob):
-        if logprob < -0.5:
-            return ProbColors.prob_0.value
-        if logprob < -0.4:
-            return ProbColors.prob_1.value
-        if logprob < -0.3:
-            return ProbColors.prob_2.value
-        if logprob < -0.2:
-            return ProbColors.prob_3.value
-        if logprob < -0.1:
-            return ProbColors.prob_4.value
-        if logprob < 0.01:
-            return ProbColors.prob_5.value
-        return ProbColors.prob_6.value
 
     def _base(self, response):
         if self.format == "json":
@@ -123,9 +124,8 @@ class Formatter:
 
 @dataclass
 class BaseModel:
-    model: str = ""
-    completion_url: str = ""
     operator: str = ""
+    completion_url: str = ""
     config_base: Path = config_dir
     backup_path: Path = Path("/tmp/ttt/")
     params: dict = field(default_factory=dict)
@@ -151,7 +151,6 @@ class OpenAIModel(BaseModel):
     operator: str = "OpenAI"
     completion_url: str = "https://api.openai.com/v1/completions"
 
-    model: Optional[str] = None
     path: Path = config_dir / "openai.yaml"
     format: Optional[str] = None
 
@@ -172,13 +171,12 @@ class OpenAIModel(BaseModel):
 
     def __post_init__(self):
         self._config = yaml.load(self.path.read_text(), Loader=yaml.FullLoader)
-        if self._config.get("backup_path", None):
-            self.backup_path = Path(self._config["backup_path"])
 
         self._params = self._config.get("engine_params", {})
-        self._params.update(self.params)
-        if self.model:
-            self._params.update({"model": self.model})
+        for k, _ in self._params.items():
+            if k in self.params:
+                self._params[k] = self.params[k]
+
         self._list = self._config.get("models", [])
 
         openai.api_key = self._config.get("api_key", "")
@@ -199,19 +197,11 @@ class OpenAIModel(BaseModel):
         self.path.write_text(yaml.dump(self._config))
 
     def gen(self, prompt):
-        self.check_max_tokens(prompt)
         self._params["prompt"] = prompt
         if self._params["model"] in self.chat_models:
             return self.formatter.format_response(self._chat(prompt))
         return self.formatter.format_response(self._gen(prompt))
 
-    def check_max_tokens(self, prompt):
-        prompt_tokens = encoding.encode(prompt)
-        max_tokens = 4000 if self._params["model"] in self.large_models else 2048
-        if len(prompt_tokens) > max_tokens:
-            raise ValueError(f"Prompt is too long. Max tokens: {max_tokens}. Prompt tokens: {len(prompt_tokens)}")
-        if len(prompt_tokens) + int(self._params["max_tokens"]) > max_tokens:
-            self._params["max_tokens"] = max_tokens - len(prompt_tokens)
 
     def _gen(self, prompt):
         self._params["prompt"] = prompt
@@ -230,11 +220,9 @@ class OpenAIModel(BaseModel):
         response = openai.ChatCompletion.create(**params).to_dict_recursive()
         self.backup(response)
 
-        # Set the 'text' field to the 'message'.'content' field
         for c in response["choices"]:
             c["text"] = c["message"]["content"]
             del c["message"]
-        # Set the 'params'.'prompt' field to the 'params'.'messages'[0]'.'content' field
         response["params"]["prompt"] = response["params"]["messages"][0]["content"]
         del response["params"]["messages"]
 

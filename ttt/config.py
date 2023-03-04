@@ -44,6 +44,7 @@ def create_config():
 TURBO_TEXT_TRANSFORMER_DEFAULT_PARAMS = {
     "format": "clean",
     "echo_prompt": False,
+    "backup_path": "/tmp/ttt/"
 }
 
 OPENAI_DEFAULT_PARAMS = {
