@@ -4,7 +4,7 @@ from pathlib import Path
 import click
 from tttp.prompter import Prompter
 
-from ttt.config import encoding
+from ttt.config import arg2dict, encoding
 
 
 @dataclass
@@ -41,7 +41,8 @@ class Chunker:
         return False
 
     def chunk(self):
+        prompt_args = arg2dict(self.params["template_args"])
         self.token_chunks = [self.tokens[i : i + self.chunk_size] for i in range(0, len(self.tokens), self.chunk_size)]
         self.chunks = [encoding.decode(chunk) for chunk in self.token_chunks]
-        self.chunks = [self.prompter.prompt(chunk) for chunk in self.chunks]
+        self.chunks = [self.prompter.prompt(chunk, prompt_args) for chunk in self.chunks]
         return self.chunks

@@ -41,11 +41,7 @@ def create_config():
     config_path.write_text(yaml.dump(TURBO_TEXT_TRANSFORMER_DEFAULT_PARAMS))
 
 
-TURBO_TEXT_TRANSFORMER_DEFAULT_PARAMS = {
-    "format": "clean",
-    "echo_prompt": False,
-    "backup_path": "/tmp/ttt/"
-}
+TURBO_TEXT_TRANSFORMER_DEFAULT_PARAMS = {"format": "clean", "echo_prompt": False, "backup_path": "/tmp/ttt/"}
 
 OPENAI_DEFAULT_PARAMS = {
     "frequency_penalty": 0,
@@ -61,3 +57,13 @@ OPENAI_DEFAULT_PARAMS = {
 
 
 load_config()
+
+
+def arg2dict(args):
+    d = {}
+    if "=" not in args:
+        return d
+    for arg in args.split(","):
+        k, v = arg.split("=")
+        d[k] = v
+    return d

@@ -5,7 +5,7 @@ from pathlib import Path
 import click
 
 from ttt.chunker import Chunker
-from ttt.config import config_path, create_config, load_config
+from ttt.config import arg2dict, config_path, create_config, load_config
 from ttt.models import BaseModel, OpenAIModel
 
 
@@ -57,13 +57,14 @@ def get_prompt(prompt, prompt_file):
 
 
 def chunk(prompt, params):
+    prompt_args = arg2dict(params["template_args"])
     chunker = Chunker(prompt, params=params)
     if chunker.needs_chunking():
         if not params["force"]:
             click.confirm("Do you want to chunk the prompt?", abort=True, err=True)
         click.echo("Chunking...", err=True)
         return chunker.chunk()
-    return [prompt]
+    return [chunker.prompter.prompt(prompt, prompt_args)]
 
 
 @click.command()
@@ -80,6 +81,7 @@ def chunk(prompt, params):
 @click.option("--list_models", "-l", help="List available models.", is_flag=True, default=False)
 @click.option("--prompt_file", "-P", help="File to load for the prompt", default=None)
 @click.option("--template_file", "-t", help="Template to apply to prompt.", default=None, type=str)
+@click.option("--template_args", "-x", help="Extra values for the template.", default="")
 @click.option("--chunk_size", "-c", help="Max size of chunks", default=None, type=int)
 @click.option("--summary_size", "-s", help="Size of chunk summaries", default=None, type=int)
 @click.option("--model", "-m", help="Name of the model to use.", default="gpt-3.5-turbo")
