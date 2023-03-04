@@ -14,12 +14,13 @@ class Chunker:
     chunks: list = field(default_factory=list)
     processed_chunks: list = field(default_factory=list)
     params: dict = field(default_factory=dict)
+    template_size: int = 0
 
     def __post_init__(self):
-        file = Prompter.find_file(self.params["template_file"])
-        self.prompter = Prompter(file)
-
-        self.template_size = len(encoding.encode(Path(file).read_text()))
+        if self.params.get("template_file", None):
+            file = Prompter.find_file(self.params["template_file"])
+            self.template_size = len(encoding.encode(Path(file).read_text()))
+            self.prompter = Prompter(file)
 
         self.summary_size: int = self.params.get("summary_size", 500)
         self.chunk_size = self.params.get("chunk_size", self.params.get("max_tokens") - self.summary_size)

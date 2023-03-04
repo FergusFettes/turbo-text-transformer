@@ -64,7 +64,9 @@ def chunk(prompt, params):
             click.confirm("Do you want to chunk the prompt?", abort=True, err=True)
         click.echo("Chunking...", err=True)
         return chunker.chunk()
-    return [chunker.prompter.prompt(prompt, prompt_args)]
+    if chunker.template_size:
+        return [chunker.prompter.prompt(prompt, prompt_args)]
+    return [prompt]
 
 
 @click.command()
@@ -93,7 +95,7 @@ def chunk(prompt, params):
 )
 @click.option("--force", "-F", help="Force chunking of prompt", is_flag=True, default=False)
 def main(prompt, format, echo_prompt, list_models, prompt_file, **params):
-    click.echo(params, err=True)
+    # click.echo(params, err=True)
     check_config()
     params = prepare_engine_params(params, format)
     options = {"params": params, "format": format, "echo_prompt": echo_prompt}

@@ -4,9 +4,68 @@ Turbo Text Transformer is a Python command-line tool for generating text using O
 
 Best used in combination with the [Turbo Text Transformer Prompts](https://github.com/fergusfettes/turbo-text-transformer-prompts) repository!
 
+## Installation
+
+To install Turbo Text Transformer, you can use pip:
+
+```sh
+pip install turbo-text-transformer
+```
+
+or clone the repository and install it manually:
+
+```sh
+git clone https://github.com/fergusfettes/turbo-text-transformer.git
+cd turbo-text-transformer
+poetry install
+```
+
+## Usage
+
+The basic syntax for running TTT is as follows:
+
+```bash
+ttt <prompt> [options]
+```
+
+Here, `<prompt>` is the text that you want to transform. You can use the `--prompt_file` option to load the prompt from a file instead of typing it out on the command line, or you can cat some text in:
+
+```
+cat some_file.txt | ttt
+```
+
+for example, to generate this readme I did
+
+```
+cat pyproject.toml ttt/__main__.py | ttt -t readme > README.md
+```
+
+where I'm using the 'readme' template, which is a template for generating a readme file.
+
+### Options
+
+There are several options you can use with the `ttt` command:
+
+- `--format/-f`: Output format (default: "clean"). Valid options are "clean", "json", or "logprobs".
+- `--echo_prompt/-e`: Echo the prompt in the output.
+- `--list_models/-l`: List available models.
+- `--prompt_file/-P`: File to load for the prompt.
+- `--template_file/-t`: Template file to apply to the prompt.
+- `--template_args/-x`: Extra values for the template.
+- `--chunk_size/-c`: Max size of chunks.
+- `--summary_size/-s`: Size of chunk summaries.
+- `--model/-m`: Name of the model to use (default: "gpt-3.5-turbo").
+- `--number/-N`: Number of completions.
+- `--logprobs/-L`: Show logprobs for completion.
+- `--max_tokens/-M`: Max number of tokens to return.
+- `--temperature/-T`: Temperature, [0, 2]-- 0 is deterministic, >0.9 is creative.
+- `--force/-F`: Force chunking of prompt.
+
 ## Configuration
 
-Configs are in the `.config` folder, put your api key in there
+Before using Turbo Text Transformer, you need to set up a configuration file. This should happen automatically when you run the `ttt` command for the first time.
+
+This will create a configuration file in your home directory. See the documentation for each model to learn how to obtain an API key.
 
 ```~/.config/ttt/openai.yaml
 api_key: sk-<your api key here>
@@ -27,55 +86,6 @@ models:
 - text-davinci-003
 etc.
 ```
-
-The default config will be generated when you first try to use it.
-
-## Installation
-
-To install Turbo Text Transformer, you can use pip:
-
-```sh
-pip install turbo-text-transformer
-```
-
-or clone the repository and install it manually:
-
-```sh
-git clone https://github.com/fergusfettes/turbo-text-transformer.git
-cd turbo-text-transformer
-poetry install
-```
-
-## Usage
-
-```
-ttt [OPTIONS] PROMPT
-# or
-cat file.txt | ttt [OPTIONS]
-# or
-ttt [OPTIONS]
-# then paste into stdin
-```
-
-The above example will generate text using the davinci model and the prompt "Hello, GPT-3!".
-
-### Options
-
-There are several options you can use with the `ttt` command:
-
-* `--model` or `-m`: The name of the model to use. Default is "davinci".
-* `--list_models` or `-l`: List available models.
-- `--echo_prompt, -e`: Whether to echo the prompt in the output.
-- `--format, -f FORMAT`: The format of the output. Can be "clean", "json", or "logprobs". Defaults to "clean".
-- `--number, -n NUMBER`: The number of completions to generate. Defaults to 1.
-- `--logprobs, -L LOGPROBS`: Whether to show logprobs for each completion. Defaults to False.
-- `--max_tokens, -M MAX_TOKENS`: The maximum number of tokens to return. Defaults to None.
-
-## Configuration
-
-Before using Turbo Text Transformer, you need to set up a configuration file. This should happen automatically when you run the `ttt` command for the first time.
-
-This will create a configuration file in your home directory. You'll also be prompted to enter API keys for the transformer models you want to use. See the documentation for each model to learn how to obtain an API key.
 
 ## Examples
 
@@ -106,13 +116,19 @@ You can also tell it to output a formatted json file with the `-f json` flag. Th
 ttt -f json "The cat sat on the"
 ```
 
-and you can pipe txt in-- for example, I generated this readme with the following command:
-
-```
-cat pyproject.toml ttt/__main__.py | tttp -f readme | ttt -m gpt-3.5-turbo -f clear > README.md
-```
-
 If you want to input more text freely, just use it without a prompt and you can write or paste directly into stdin.
+
+## Chunking
+
+If you dump in a tonne of text, it will try to chunk it up into smaller pieces:
+
+
+```
+curl https://www.poetryfoundation.org/poems/45477/song-of-myself-1892-version | ttt -t html -c 1900 -s 1900 > song-of-myself.txt
+cat song-of-myself.txt | ttt -t poet -x 'poet=Notorious B.I.G.' > song_of_biggie.txt
+```
+
+(Note, this is an incredibly wasteful way to extract the text from a website, but at current prices should only cost ~$0.30 so, unhinged as it its, its probably about parity with clicking and dragging.)
 
 ### Models
 
