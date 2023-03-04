@@ -56,9 +56,9 @@ TURBO_TEXT_TRANSFORMER_DEFAULT_PARAMS = {"format": "clean", "echo_prompt": False
 OPENAI_DEFAULT_PARAMS = {
     "frequency_penalty": 0,
     "logprobs": 1,
-    "max_tokens": 50,
+    "max_tokens": 200,
     "model": "gpt-3.5-turbo",
-    "n": 4,
+    "n": 1,
     "presence_penalty": 0,
     "stop": None,
     "temperature": 0.9,

@@ -89,7 +89,7 @@ def chunk(prompt, params):
 @click.option("--chunk_size", "-c", help="Max size of chunks", default=None, type=int)
 @click.option("--summary_size", "-s", help="Size of chunk summaries", default=None, type=int)
 @click.option("--model", "-m", help="Name of the model to use.", default="gpt-3.5-turbo")
-@click.option("--number", "-N", help="Number of completions.", default=None, type=int)
+@click.option("--number", "-N,n", help="Number of completions.", default=None, type=int)
 @click.option("--logprobs", "-L", help="Show logprobs for completion", default=None, type=int)
 @click.option("--max_tokens", "-M", help="Max number of tokens to return", default=None, type=int)
 @click.option(

@@ -1,5 +1,6 @@
 import datetime
 import json
+import math
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -15,27 +16,25 @@ from ttt.config import config, config_dir, encoding
 @dataclass
 class ProbColors:
     # Colors of foreground and background for different probabilities
-    prob_0 = (195, 196)
-    prob_1 = (195, 202)
-    prob_2 = (195, 208)
-    prob_3 = (239, 220)
-    prob_4 = (239, 226)
-    prob_5 = (239, 76)
-    prob_6 = (239, 82)
+    prob_1 = (239, 49)
+    prob_2 = (239, 78)
+    prob_3 = (195, 145)
+    prob_4 = (195, 173)
+    prob_5 = (195, 209)
+    prob_6 = (195, 203)
 
     @staticmethod
     def choose_color(logprob):
-        if logprob < -0.5:
-            return ProbColors.prob_0
-        if logprob < -0.4:
+        prob = math.exp(logprob)
+        if prob >= 0.8:
             return ProbColors.prob_1
-        if logprob < -0.3:
+        if prob >= 0.6:
             return ProbColors.prob_2
-        if logprob < -0.2:
+        if prob >= 0.4:
             return ProbColors.prob_3
-        if logprob < -0.1:
+        if prob >= 0.2:
             return ProbColors.prob_4
-        if logprob < 0.01:
+        if prob >= 0.05:
             return ProbColors.prob_5
         return ProbColors.prob_6
 
