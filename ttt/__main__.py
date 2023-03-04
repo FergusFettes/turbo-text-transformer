@@ -9,9 +9,9 @@ from ttt.config import arg2dict, config_path, create_config, load_config
 from ttt.models import BaseModel, OpenAIModel
 
 
-def check_config():
+def check_config(reinit):
     """Check that the config file exists."""
-    if config_path.exists():
+    if not reinit and config_path.exists():
         return
 
     click.echo("Config file not found. Creating one for you...", err=True, color="red")
@@ -29,7 +29,7 @@ def prepare_engine_params(params, format):
     """Prepare options for the OpenAI API."""
     params = {k: v for k, v in params.items() if v is not None}
 
-    params["max_tokens"] = 4000 if params["model"] in OpenAIModel().large_models else 2048
+    params["token_limit"] = 4000 if params["model"] in OpenAIModel().large_models else 2048
     if "number" in params:
         params["n"] = params.pop("number")
     if "logprobs" in params and params["logprobs"] == 0:
@@ -79,6 +79,7 @@ def chunk(prompt, params):
     type=click.Choice(["clean", "json", "logprobs"]),
     show_default=True,
 )
+@click.option("--reinit", "-R", help="Recreate the config files", is_flag=True, default=False)
 @click.option("--echo_prompt", "-e", help="Echo the pormpt in the output", is_flag=True, default=False)
 @click.option("--list_models", "-l", help="List available models.", is_flag=True, default=False)
 @click.option("--prompt_file", "-P", help="File to load for the prompt", default=None)
@@ -94,9 +95,9 @@ def chunk(prompt, params):
     "--temperature", "-T", help="Temperature, [0, 2]-- 0 is deterministic, >0.9 is creative.", default=None, type=int
 )
 @click.option("--force", "-F", help="Force chunking of prompt", is_flag=True, default=False)
-def main(prompt, format, echo_prompt, list_models, prompt_file, **params):
+def main(prompt, format, reinit, echo_prompt, list_models, prompt_file, **params):
     # click.echo(params, err=True)
-    check_config()
+    check_config(reinit)
     params = prepare_engine_params(params, format)
     options = {"params": params, "format": format, "echo_prompt": echo_prompt}
 

@@ -23,19 +23,19 @@ class Chunker:
             self.prompter = Prompter(file)
 
         self.summary_size: int = self.params.get("summary_size", 500)
-        self.chunk_size = self.params.get("chunk_size", self.params.get("max_tokens") - self.summary_size)
+        self.chunk_size = self.params.get("chunk_size", self.params.get("token_limit") - self.summary_size)
 
         self.tokens = encoding.encode(self.text)
         self.tokens_size = len(self.tokens)
-        self.in_size = self.chunk_size + self.template_size
+        self.in_size = min(self.chunk_size, self.tokens_size) + self.template_size
         self.total_size = self.in_size + self.summary_size
 
     def needs_chunking(self):
-        if self.total_size > self.params.get("max_tokens") or self.tokens_size > self.chunk_size:
+        if self.total_size > self.params.get("token_limit") or self.tokens_size > self.chunk_size:
             click.echo(
                 "Prompt is too long. "
                 f"Prompt/template/summary: {self.tokens_size}/{self.template_size}/{self.summary_size} "
-                f"Max tokens: {self.params.get('max_tokens')}",
+                f"Token limit tokens: {self.params.get('token_limit')}",
                 err=True,
             )
             return True
