@@ -1307,14 +1307,14 @@ files = [
 
 [[package]]
 name = "tqdm"
-version = "4.64.1"
+version = "4.65.0"
 description = "Fast, Extensible Progress Meter"
 category = "main"
 optional = false
-python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,>=2.7"
+python-versions = ">=3.7"
 files = [
-    {file = "tqdm-4.64.1-py2.py3-none-any.whl", hash = "sha256:6fee160d6ffcd1b1c68c65f14c829c22832bc401726335ce92c52d395944a6a1"},
-    {file = "tqdm-4.64.1.tar.gz", hash = "sha256:5f4f682a004951c1b450bc753c710e9280c5746ce6ffedee253ddbcbf54cf1e4"},
+    {file = "tqdm-4.65.0-py3-none-any.whl", hash = "sha256:c4f53a17fe37e132815abceec022631be8ffe1b9381c2e6e30aa70edc99e9671"},
+    {file = "tqdm-4.65.0.tar.gz", hash = "sha256:1871fb68a86b8fb3b59ca4cdd3dcccbc7e6d613eeed31f4c332531977b89beb5"},
 ]
 
 [package.dependencies]
@@ -1344,14 +1344,14 @@ test = ["argcomplete (>=2.0)", "pre-commit", "pytest", "pytest-mock"]
 
 [[package]]
 name = "turbo-text-transformer-prompts"
-version = "0.1.2"
+version = "0.1.3"
 description = ""
 category = "main"
 optional = false
 python-versions = ">=3.10,<4.0"
 files = [
-    {file = "turbo_text_transformer_prompts-0.1.2-py3-none-any.whl", hash = "sha256:7bff9c502245a40cc54843988111eacb20be204e5d4dca6b4523a79c22d27dfd"},
-    {file = "turbo_text_transformer_prompts-0.1.2.tar.gz", hash = "sha256:c7563aa1b044fcb1afa20722074ba482d20de2a849d4dfd620913174e72f6bc0"},
+    {file = "turbo_text_transformer_prompts-0.1.3-py3-none-any.whl", hash = "sha256:e6bb0206f8bd9120acb8c84c65649c0b406c483112f7dffe73fe12cb54ea0b91"},
+    {file = "turbo_text_transformer_prompts-0.1.3.tar.gz", hash = "sha256:9ae4638e7da90efb8f09fd56acecf479998bd33f00187a24921b983d90322f92"},
 ]
 
 [package.dependencies]

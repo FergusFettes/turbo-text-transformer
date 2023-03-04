@@ -4,11 +4,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
+import click
 import openai
 import yaml
 from colored import attr, bg, fg
 
-from ttt.config import config, config_dir
+from ttt.config import config, config_dir, encoding
 
 
 @dataclass
@@ -196,11 +197,18 @@ class OpenAIModel(BaseModel):
         self.path.write_text(yaml.dump(self._config))
 
     def gen(self, prompt):
-        self._params["prompt"] = prompt
+        prompt_tokens = encoding.encode(prompt)
+        max_tokens = 4000 if self._params["model"] in OpenAIModel().large_models else 2048
+        if len(prompt_tokens) + int(self._params["max_tokens"]) > max_tokens:
+            self._params["max_tokens"] = max_tokens - len(prompt_tokens)
+            click.echo(
+                "Prompt is too long. " f"Max tokens adjusted: {max_tokens}. " f"Prompt tokens: {len(prompt_tokens)}",
+                err=True,
+            )
+
         if self._params["model"] in self.chat_models:
             return self.formatter.format_response(self._chat(prompt))
         return self.formatter.format_response(self._gen(prompt))
-
 
     def _gen(self, prompt):
         self._params["prompt"] = prompt
@@ -213,8 +221,10 @@ class OpenAIModel(BaseModel):
     def _chat(self, prompt):
         params = self._params
         params["messages"] = [{"role": "user", "content": prompt}]
-        del params["prompt"]
-        del params["logprobs"]
+        if "prompt" in params:
+            del params["prompt"]
+        if "logprobs" in params:
+            del params["logprobs"]
 
         response = openai.ChatCompletion.create(**params).to_dict_recursive()
         self.backup(response)
