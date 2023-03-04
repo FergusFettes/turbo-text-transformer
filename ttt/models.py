@@ -7,7 +7,6 @@ from typing import Optional
 import openai
 import yaml
 from colored import attr, bg, fg
-import click
 
 from ttt.config import config, config_dir
 
@@ -127,7 +126,7 @@ class BaseModel:
     operator: str = ""
     completion_url: str = ""
     config_base: Path = config_dir
-    backup_path: Path = Path("/tmp/ttt/")
+    backup_path: Path = Path(config.get("backup_path", "/tmp/ttt/"))
     params: dict = field(default_factory=dict)
     format: str = config.get("format", "clean")
     echo_prompt: bool = config.get("echo_prompt", False)
