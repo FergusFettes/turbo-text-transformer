@@ -41,7 +41,7 @@ def prepare_engine_params(params, format):
     return params
 
 
-def get_prompt(prompt, prompt_file):
+def get_prompt(prompt, prompt_file, params):
     """Get the prompt from stdin if it's not provided."""
     if prompt_file:
         prompt = Path(prompt_file).read_text().strip()
@@ -53,6 +53,7 @@ def get_prompt(prompt, prompt_file):
         if not prompt:
             click.echo("No prompt provided. Use the -p flag or pipe a prompt to stdin.", err=True, color="red")
             raise click.Abort()
+        params["force"] = True
     return prompt
 
 
@@ -107,7 +108,7 @@ def main(prompt, format, reinit, echo_prompt, list_models, prompt_file, **params
         sink.write("\n".join(oam.list))
         return
 
-    prompt = get_prompt(prompt, prompt_file)
+    prompt = get_prompt(prompt, prompt_file, params)
     prompts = chunk(prompt, params)
     if params["model"] in oam.list:
         responses = [oam.gen(prompt) for prompt in prompts]
