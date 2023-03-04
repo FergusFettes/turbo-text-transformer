@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 
+from pathlib import Path
+
 import click
 
-from ttt.config import config_path, create_config, load_config
+from ttt.chunker import Chunker
+from ttt.config import arg2dict, config_path, create_config, load_config
 from ttt.models import BaseModel, OpenAIModel
 
 
-def check_config():
+def check_config(reinit):
     """Check that the config file exists."""
-    if config_path.exists():
+    if not reinit and config_path.exists():
         return
 
     click.echo("Config file not found. Creating one for you...", err=True, color="red")
@@ -25,6 +28,8 @@ def check_config():
 def prepare_engine_params(params, format):
     """Prepare options for the OpenAI API."""
     params = {k: v for k, v in params.items() if v is not None}
+
+    params["token_limit"] = 4000 if params["model"] in OpenAIModel().large_models else 2048
     if "number" in params:
         params["n"] = params.pop("number")
     if "logprobs" in params and params["logprobs"] == 0:
@@ -36,8 +41,11 @@ def prepare_engine_params(params, format):
     return params
 
 
-def get_prompt(prompt):
+def get_prompt(prompt, prompt_file):
     """Get the prompt from stdin if it's not provided."""
+    if prompt_file:
+        prompt = Path(prompt_file).read_text().strip()
+        return prompt
     if not prompt:
         click.echo("Reading from stdin... (Ctrl-D to end)", err=True)
         prompt = click.get_text_stream("stdin").read().strip()
@@ -48,9 +56,21 @@ def get_prompt(prompt):
     return prompt
 
 
+def chunk(prompt, params):
+    prompt_args = arg2dict(params["template_args"])
+    chunker = Chunker(prompt, params=params)
+    if chunker.needs_chunking():
+        if not params["force"]:
+            click.confirm("Do you want to chunk the prompt?", abort=True, err=True)
+        click.echo("Chunking...", err=True)
+        return chunker.chunk()
+    if chunker.template_size:
+        return [chunker.prompter.prompt(prompt, prompt_args)]
+    return [prompt]
+
+
 @click.command()
 @click.argument("prompt", required=False)
-@click.option("--model", "-m", help="Name of the model to use.", default="gpt-3.5-turbo-0301")
 @click.option(
     "--format",
     "-f",
@@ -59,25 +79,45 @@ def get_prompt(prompt):
     type=click.Choice(["clean", "json", "logprobs"]),
     show_default=True,
 )
+@click.option("--reinit", "-R", help="Recreate the config files", is_flag=True, default=False)
+@click.option("--echo_prompt", "-e", help="Echo the pormpt in the output", is_flag=True, default=False)
 @click.option("--list_models", "-l", help="List available models.", is_flag=True, default=False)
-@click.option("--echo_prompt", "-e", help="List available models.", is_flag=True, default=False)
-@click.option("--number", "-n", help="Number of completions.", default=None, type=int)
+@click.option("--prompt_file", "-P", help="File to load for the prompt", default=None)
+@click.option("--template_file", "-t", help="Template to apply to prompt.", default=None, type=str)
+@click.option("--template_args", "-x", help="Extra values for the template.", default="")
+@click.option("--chunk_size", "-c", help="Max size of chunks", default=None, type=int)
+@click.option("--summary_size", "-s", help="Size of chunk summaries", default=None, type=int)
+@click.option("--model", "-m", help="Name of the model to use.", default="gpt-3.5-turbo")
+@click.option("--number", "-N", help="Number of completions.", default=None, type=int)
 @click.option("--logprobs", "-L", help="Show logprobs for completion", default=None, type=int)
 @click.option("--max_tokens", "-M", help="Max number of tokens to return", default=None, type=int)
-def main(prompt, model, format, echo_prompt, list_models, **params):
-    check_config()
-    prompt = get_prompt(prompt)
-    options = {"params": prepare_engine_params(params, format), "format": format, "echo_prompt": echo_prompt}
-
-    oam = OpenAIModel(model=model, **options)
-    if list_models:
-        click.get_text_stream("stdout").write("\n".join(oam.list))
-        return
+@click.option(
+    "--temperature", "-T", help="Temperature, [0, 2]-- 0 is deterministic, >0.9 is creative.", default=None, type=int
+)
+@click.option("--force", "-F", help="Force chunking of prompt", is_flag=True, default=False)
+def main(prompt, format, reinit, echo_prompt, list_models, prompt_file, **params):
+    # click.echo(params, err=True)
+    check_config(reinit)
+    params = prepare_engine_params(params, format)
+    options = {"params": params, "format": format, "echo_prompt": echo_prompt}
 
     sink = click.get_text_stream("stdout")
-    if model in oam.list:
-        sink.write(oam.gen(prompt))
+    oam = OpenAIModel(**options)
+    if list_models:
+        sink.write("\n".join(oam.list))
         return
 
-    bm = BaseModel(model="test", **options)
-    sink.write(bm.gen(prompt))
+    prompt = get_prompt(prompt, prompt_file)
+    prompts = chunk(prompt, params)
+    if params["model"] in oam.list:
+        responses = [oam.gen(prompt) for prompt in prompts]
+        sink.write("\n".join(responses))
+        return
+
+    if params["model"] == "test":
+        bm = BaseModel(**options)
+        responses = [bm.gen(prompt) for prompt in prompts]
+        sink.write("\n".join(responses))
+        return
+
+    click.echo("Model not found. Use the -l flag to list available models.", err=True, color="red")

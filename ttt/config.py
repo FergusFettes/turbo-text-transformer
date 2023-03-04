@@ -3,6 +3,7 @@ import logging
 from pathlib import Path
 
 import tiktoken
+import tttp
 import yaml
 
 encoding = tiktoken.get_encoding("gpt2")
@@ -40,11 +41,17 @@ def create_config():
     config_dir.mkdir(parents=True, exist_ok=True)
     config_path.write_text(yaml.dump(TURBO_TEXT_TRANSFORMER_DEFAULT_PARAMS))
 
+    # Find the templates, and make sure they are in the right place
+    tttp_dir = Path(tttp.__file__).parent
+    new_templates = tttp_dir.parent / "templates"
+    templates = config_dir / "templates"
+    templates.mkdir(parents=True, exist_ok=True)
+    for template in new_templates.glob("*.j2"):
+        if not (templates / template.name).exists():
+            (templates / template.name).write_text(template.read_text())
 
-TURBO_TEXT_TRANSFORMER_DEFAULT_PARAMS = {
-    "format": "clean",
-    "echo_prompt": False,
-}
+
+TURBO_TEXT_TRANSFORMER_DEFAULT_PARAMS = {"format": "clean", "echo_prompt": False, "backup_path": "/tmp/ttt/"}
 
 OPENAI_DEFAULT_PARAMS = {
     "frequency_penalty": 0,
@@ -60,3 +67,13 @@ OPENAI_DEFAULT_PARAMS = {
 
 
 load_config()
+
+
+def arg2dict(args):
+    d = {}
+    if "=" not in args:
+        return d
+    for arg in args.split(","):
+        k, v = arg.split("=")
+        d[k] = v
+    return d

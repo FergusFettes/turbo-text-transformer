@@ -14,6 +14,7 @@ openai = "^0.27.0"
 click = "^8.1.3"
 colored = "^1.4.4"
 tiktoken = "^0.3.0"
+turbo-text-transformer-prompts = "^0.1.3"
 
 [tool.poetry.group.dev.dependencies]
 ipdb = "^0.13.11"
