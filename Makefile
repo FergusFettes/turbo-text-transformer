@@ -1,7 +1,7 @@
 include .env
 export
 
-publish:
+publish: reqs
 	poetry publish --build -u __token__ -p ${PYPI_TOKEN}
 
 reqs:

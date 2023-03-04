@@ -122,9 +122,7 @@ If you want to input more text freely, just use it without a prompt and you can 
 
 If you dump in a tonne of text, it will try to chunk it up into smaller pieces:
 
-
 ```
-curl https://www.poetryfoundation.org/poems/45477/song-of-myself-1892-version | ttt -t html -c 1900 -s 1900 > song-of-myself.txt
 cat song-of-myself.txt | ttt -t poet -x 'poet=Notorious B.I.G.' > song_of_biggie.txt
 ```
 
