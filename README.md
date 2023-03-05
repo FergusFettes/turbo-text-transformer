@@ -136,6 +136,11 @@ Turbo Text Transformer includes support for text generation with all the openai 
 
 If you find a bug or would like to contribute to Turbo Text Transformer, please create a new GitHub issue or pull request.
 
+## Inspiration/Similar
+
+Inspired by [Loom](https://github.com/socketteer/loom) (more to come on this front-- aiming for a command-line-loom)
+and [Shell-GPT](https://github.com/TheR1D/shell_gpt) (very similar, but I have a lot more features and support for catting)
+
 ## License
 
 Turbo Text Transformer is released under the MIT License. See `LICENSE` for more information.
