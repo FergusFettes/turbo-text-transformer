@@ -1261,14 +1261,14 @@ test = ["argcomplete (>=2.0)", "pre-commit", "pytest", "pytest-mock"]
 
 [[package]]
 name = "turbo-text-transformer-prompts"
-version = "0.1.7"
+version = "0.1.8"
 description = ""
 category = "main"
 optional = false
 python-versions = ">3.8"
 files = [
-    {file = "turbo_text_transformer_prompts-0.1.7-py3-none-any.whl", hash = "sha256:61d40e1d40be69d2e63effd25238391268ad7c860bcbe1486f7d2f8833902ebb"},
-    {file = "turbo_text_transformer_prompts-0.1.7.tar.gz", hash = "sha256:f73634e33e8658373f3ec191b25114fbb65f9f1bc4178b08eaf8ce24bfa0f88e"},
+    {file = "turbo_text_transformer_prompts-0.1.8-py3-none-any.whl", hash = "sha256:4bdb4630bd3e062110506832caa41b475396532809a9ace25ef08d0ca00e3526"},
+    {file = "turbo_text_transformer_prompts-0.1.8.tar.gz", hash = "sha256:e8c693e6a16e594236eb8525ff894d7aceb0df807f8b1cda1b564fb08dcee904"},
 ]
 
 [package.dependencies]
@@ -1396,4 +1396,4 @@ multidict = ">=4.0"
 [metadata]
 lock-version = "2.0"
 python-versions = ">3.8"
-content-hash = "b9a7039b66a1f78f1f4b048254a441de5597556becd738dee3680d09c26f92a2"
+content-hash = "6fcc5bd9db6619d2fd1b759182adec8d3b02850cb2bcb21ce7754d7aa9888a9e"
