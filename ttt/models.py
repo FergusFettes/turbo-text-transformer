@@ -8,13 +8,14 @@ from typing import Optional
 import click
 import openai
 import yaml
-from langchain import LLMChain
-from langchain.chat_models import ChatOpenAI
-from langchain.llms import OpenAI
-from langchain.prompts.chat import ChatPromptTemplate, HumanMessagePromptTemplate
 
 from ttt.config import config, config_dir, get_encoding
 from ttt.formatter import Formatter
+
+# from langchain import LLMChain
+# from langchain.chat_models import ChatOpenAI
+# from langchain.llms import OpenAI
+# from langchain.prompts.chat import ChatPromptTemplate, HumanMessagePromptTemplate
 
 
 @dataclass
