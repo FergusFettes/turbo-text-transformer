@@ -57,9 +57,10 @@ def get_prompt(prompt, prompt_file, params):
     return prompt
 
 
-def chunk(prompt, params):
+def chunk(prompt, verbose, params):
     prompt_args = arg2dict(params["template_args"])
-    chunker = Chunker(prompt, params=params)
+    __import__("ipdb").set_trace()
+    chunker = Chunker(prompt, verbose=verbose, params=params)
     if chunker.needs_chunking():
         if not params["force"]:
             click.confirm("Do you want to chunk the prompt?", abort=True, err=True)
@@ -82,6 +83,8 @@ def chunk(prompt, params):
 )
 @click.option("--reinit", "-R", help="Recreate the config files", is_flag=True, default=False)
 @click.option("--echo_prompt", "-e", help="Echo the pormpt in the output", is_flag=True, default=False)
+@click.option("--cost_only", "-C", help="Estimate the cost of the query", is_flag=True, default=False)
+@click.option("--verbose", "-v", help="Verbose output", is_flag=True, default=False)
 @click.option("--list_models", "-l", help="List available models.", is_flag=True, default=False)
 @click.option("--prompt_file", "-P", help="File to load for the prompt", default=None)
 @click.option("--template_file", "-t", help="Template to apply to prompt.", default=None, type=str)
@@ -96,7 +99,7 @@ def chunk(prompt, params):
     "--temperature", "-T", help="Temperature, [0, 2]-- 0 is deterministic, >0.9 is creative.", default=None, type=int
 )
 @click.option("--force", "-F", help="Force chunking of prompt", is_flag=True, default=False)
-def main(prompt, format, reinit, echo_prompt, list_models, prompt_file, **params):
+def main(prompt, format, reinit, echo_prompt, cost_only, verbose, list_models, prompt_file, **params):
     # click.echo(params, err=True)
     check_config(reinit)
     params = prepare_engine_params(params, format)
@@ -109,7 +112,11 @@ def main(prompt, format, reinit, echo_prompt, list_models, prompt_file, **params
         return
 
     prompt = get_prompt(prompt, prompt_file, params)
-    prompts = chunk(prompt, params)
+    if cost_only:
+        verbose = True
+    prompts = chunk(prompt, verbose, params)
+    if cost_only:
+        return
     if params["model"] in oam.list:
         responses = [oam.gen(prompt) for prompt in prompts]
         sink.write("\n".join(responses))

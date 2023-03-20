@@ -6,8 +6,6 @@ import tiktoken
 import tttp
 import yaml
 
-encoding = tiktoken.get_encoding("gpt2")
-
 file_path = Path("/tmp/ttt/")
 file_path.mkdir(parents=True, exist_ok=True)
 
@@ -49,6 +47,14 @@ def create_config():
     for template in new_templates.glob("*.j2"):
         if not (templates / template.name).exists():
             (templates / template.name).write_text(template.read_text())
+
+
+def get_encoding(model):
+    try:
+        encoding = tiktoken.encoding_for_model(model)
+    except KeyError:
+        encoding = tiktoken.get_encoding("gpt2")
+    return encoding
 
 
 TURBO_TEXT_TRANSFORMER_DEFAULT_PARAMS = {"format": "clean", "echo_prompt": False, "backup_path": "/tmp/ttt/"}

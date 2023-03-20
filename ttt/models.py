@@ -13,7 +13,7 @@ from langchain.chat_models import ChatOpenAI
 from langchain.llms import OpenAI
 from langchain.prompts.chat import ChatPromptTemplate, HumanMessagePromptTemplate
 
-from ttt.config import config, config_dir, encoding
+from ttt.config import config, config_dir, get_encoding
 from ttt.formatter import Formatter
 
 
@@ -92,6 +92,7 @@ class OpenAIModel(BaseModel):
         self.path.write_text(yaml.dump(self._config))
 
     def gen(self, prompt):
+        encoding = get_encoding(self._params["model"])
         prompt_tokens = encoding.encode(prompt)
         max_tokens = 4000 if self._params["model"] in OpenAIModel().large_models else 2048
         if len(prompt_tokens) + int(self._params["max_tokens"]) > max_tokens:
