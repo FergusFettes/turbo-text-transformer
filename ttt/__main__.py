@@ -59,7 +59,6 @@ def get_prompt(prompt, prompt_file, params):
 
 def chunk(prompt, verbose, params):
     prompt_args = arg2dict(params["template_args"])
-    __import__("ipdb").set_trace()
     chunker = Chunker(prompt, verbose=verbose, params=params)
     if chunker.needs_chunking():
         if not params["force"]:

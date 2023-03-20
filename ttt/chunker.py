@@ -23,7 +23,6 @@ class Chunker:
     verbose: bool = False
 
     def __post_init__(self):
-        __import__("ipdb").set_trace()
         if self.params.get("template_file", None):
             file = Prompter.find_file(self.params["template_file"])
             encoding = get_encoding(self.params["model"])
