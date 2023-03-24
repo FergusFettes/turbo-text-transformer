@@ -23,9 +23,9 @@ class Chunker:
     verbose: bool = False
 
     def __post_init__(self):
+        encoding = get_encoding(self.params["model"])
         if self.params.get("template_file", None):
             file = Prompter.find_file(self.params["template_file"])
-            encoding = get_encoding(self.params["model"])
             self.template_size = len(encoding.encode(Path(file).read_text()))
             self.prompter = Prompter(file)
 
