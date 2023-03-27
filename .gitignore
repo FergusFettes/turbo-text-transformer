@@ -153,3 +153,4 @@ package/
 _data/
 
 TODO.md
+*.json

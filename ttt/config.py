@@ -33,6 +33,7 @@ def load_config():
         config = {}
         return
     config = yaml.load(config_path.read_text(), Loader=yaml.Loader)
+    return config
 
 
 def create_config():

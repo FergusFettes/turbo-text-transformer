@@ -3,10 +3,37 @@
 from pathlib import Path
 
 import click
+from dotenv import load_dotenv
+from gpt_index import GPTListIndex
+from gpt_index.langchain_helpers.memory_wrapper import GPTIndexChatMemory
+from langchain.agents import initialize_agent
+from langchain.llms import OpenAI
+from langchain.text_splitter import CharacterTextSplitter
 
 from ttt.chunker import Chunker
-from ttt.config import arg2dict, config_path, create_config, load_config
+from ttt.config import arg2dict, config, config_path, create_config, load_config
 from ttt.models import BaseModel, OpenAIModel
+
+load_dotenv()
+
+
+def run_chat(prompt, model, file="chat_history.json"):
+    llm = OpenAI(model=model)
+    if file and Path(file).exists():
+        index = GPTListIndex.load_from_disk(file)
+    else:
+        index = GPTListIndex([], text_splitter=CharacterTextSplitter())
+    memory = GPTIndexChatMemory(
+        index=index,
+        memory_key="chat_history",
+        query_kwargs={"response_mode": "compact"},
+        # return_source returns source nodes instead of querying index
+        return_source=True,
+    )
+    agent_chain = initialize_agent([], llm, agent="conversational-react-description", memory=memory)
+    response = agent_chain.run(input=prompt)
+    index.save_to_disk(file)
+    return response
 
 
 def check_config(reinit):
@@ -22,7 +49,7 @@ def check_config(reinit):
 
     # Same for other providers...
 
-    load_config()
+    return load_config()
 
 
 def prepare_engine_params(params, format):
@@ -80,6 +107,7 @@ def chunk(prompt, verbose, params):
     type=click.Choice(["clean", "json", "logprobs"]),
     show_default=True,
 )
+@click.option("--chat", "-H", help="Chat mode", is_flag=True, default=False)
 @click.option("--reinit", "-R", help="Recreate the config files", is_flag=True, default=False)
 @click.option("--echo_prompt", "-e", help="Echo the pormpt in the output", is_flag=True, default=False)
 @click.option("--cost_only", "-C", help="Estimate the cost of the query", is_flag=True, default=False)
@@ -98,7 +126,7 @@ def chunk(prompt, verbose, params):
     "--temperature", "-T", help="Temperature, [0, 2]-- 0 is deterministic, >0.9 is creative.", default=None, type=int
 )
 @click.option("--force", "-F", help="Force chunking of prompt", is_flag=True, default=False)
-def main(prompt, format, reinit, echo_prompt, cost_only, verbose, list_models, prompt_file, **params):
+def main(prompt, format, chat, reinit, echo_prompt, cost_only, verbose, list_models, prompt_file, **params):
     # click.echo(params, err=True)
     check_config(reinit)
     params = prepare_engine_params(params, format)
@@ -111,11 +139,18 @@ def main(prompt, format, reinit, echo_prompt, cost_only, verbose, list_models, p
         return
 
     prompt = get_prompt(prompt, prompt_file, params)
+
+    if chat:
+        response = run_chat(prompt, params["model"])
+        sink.write(response)
+        return
+
     if cost_only:
         verbose = True
     prompts = chunk(prompt, verbose, params)
     if cost_only:
         return
+
     if params["model"] in oam.list:
         responses = [oam.gen(prompt) for prompt in prompts]
         sink.write("\n".join(responses))
