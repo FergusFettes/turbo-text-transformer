@@ -36,6 +36,10 @@ def load_config():
     return config
 
 
+def save_config(config):
+    config_path.write_text(yaml.dump(config))
+
+
 def create_config():
     config_dir.mkdir(parents=True, exist_ok=True)
     config_path.write_text(yaml.dump(TURBO_TEXT_TRANSFORMER_DEFAULT_PARAMS))

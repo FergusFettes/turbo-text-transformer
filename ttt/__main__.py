@@ -11,13 +11,13 @@ from langchain.llms import OpenAI
 from langchain.text_splitter import CharacterTextSplitter
 
 from ttt.chunker import Chunker
-from ttt.config import arg2dict, config, config_path, create_config, load_config
+from ttt.config import arg2dict, config, config_path, create_config, load_config, save_config
 from ttt.models import BaseModel, OpenAIModel
 
 load_dotenv()
 
 
-def run_chat(prompt, model, file="chat_history.json"):
+def run_chat(prompt, model, file):
     llm = OpenAI(model=model)
     if file and Path(file).exists():
         index = GPTListIndex.load_from_disk(file)
@@ -33,13 +33,13 @@ def run_chat(prompt, model, file="chat_history.json"):
     agent_chain = initialize_agent([], llm, agent="conversational-react-description", memory=memory)
     response = agent_chain.run(input=prompt)
     index.save_to_disk(file)
-    return response
+    return "\n" + response
 
 
 def check_config(reinit):
     """Check that the config file exists."""
     if not reinit and config_path.exists():
-        return
+        return config
 
     click.echo("Config file not found. Creating one for you...", err=True, color="red")
     create_config()
@@ -50,6 +50,21 @@ def check_config(reinit):
     # Same for other providers...
 
     return load_config()
+
+
+def check_chat(toggle, default, config):
+    if toggle:
+        config["chat"] = not config["chat"]
+        click.echo(f"Chat mode is now {'on' if config['chat'] else 'off'}.", err=True)
+
+    if default:
+        config["chat_file"] = default
+
+    if config["chat"] or config["chat_file"]:
+        save_config(config)
+
+    if config["chat"]:
+        click.echo(f"Chat mode is on. Using {config['chat_file']} as the chat history file.", err=True)
 
 
 def prepare_engine_params(params, format):
@@ -107,7 +122,8 @@ def chunk(prompt, verbose, params):
     type=click.Choice(["clean", "json", "logprobs"]),
     show_default=True,
 )
-@click.option("--chat", "-H", help="Chat mode", is_flag=True, default=False)
+@click.option("--toggle_chat", "-H", help="Set chat mode on/off", is_flag=True, default=False)
+@click.option("--default_chat", "-d", help="Set default chat.", default="")
 @click.option("--reinit", "-R", help="Recreate the config files", is_flag=True, default=False)
 @click.option("--echo_prompt", "-e", help="Echo the pormpt in the output", is_flag=True, default=False)
 @click.option("--cost_only", "-C", help="Estimate the cost of the query", is_flag=True, default=False)
@@ -126,9 +142,22 @@ def chunk(prompt, verbose, params):
     "--temperature", "-T", help="Temperature, [0, 2]-- 0 is deterministic, >0.9 is creative.", default=None, type=int
 )
 @click.option("--force", "-F", help="Force chunking of prompt", is_flag=True, default=False)
-def main(prompt, format, chat, reinit, echo_prompt, cost_only, verbose, list_models, prompt_file, **params):
+def main(
+    prompt,
+    format,
+    toggle_chat,
+    default_chat,
+    reinit,
+    echo_prompt,
+    cost_only,
+    verbose,
+    list_models,
+    prompt_file,
+    **params,
+):
     # click.echo(params, err=True)
-    check_config(reinit)
+    config = check_config(reinit)
+    check_chat(toggle_chat, default_chat, config)
     params = prepare_engine_params(params, format)
     options = {"params": params, "format": format, "echo_prompt": echo_prompt}
 
@@ -140,8 +169,8 @@ def main(prompt, format, chat, reinit, echo_prompt, cost_only, verbose, list_mod
 
     prompt = get_prompt(prompt, prompt_file, params)
 
-    if chat:
-        response = run_chat(prompt, params["model"])
+    if config["chat"]:
+        response = run_chat(prompt, params["model"], config["chat_file"])
         sink.write(response)
         return
 
