@@ -40,7 +40,7 @@ class Chunker:
             model_cost = 0.02
             if self.params.get("model") in self.model_cost_per_token:
                 model_cost = self.model_cost_per_token[self.params.get("model")]["prompt"]
-            cost = self.in_size * model_cost
+            cost = (self.tokens_size + self.template_size) * model_cost
             print(f"Cost of the initial request: {cost:.2f} USD")
         self.total_size = self.in_size + self.summary_size
 

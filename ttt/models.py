@@ -57,6 +57,7 @@ class OpenAIModel(BaseModel):
     chat_models: list = field(default_factory=lambda: ["gpt-3.5-turbo-0301", "gpt-3.5-turbo", "gpt-4"])
     large_models: list = field(
         default_factory=lambda: [
+            "gpt-4",
             "gpt-3.5-turbo",
             "gpt-3.5-turbo-0301",
             "text-davinci-003",
