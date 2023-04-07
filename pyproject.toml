@@ -16,7 +16,7 @@ colored = "^1.4.4"
 tiktoken = "^0.2.0"
 turbo-text-transformer-prompts = "^0.1.8"
 langchain = {git = "ssh://git@github.com/fergusfettes/langchain", rev = "0.0.118"}
-gpt_index = {git = "ssh://git@github.com/fergusfettes/llama_index", rev = "0.5.6"}
+gpt_index = {git = "ssh://git@github.com/fergusfettes/llama_index", rev = "0.5.7"}
 python-dotenv = "^1.0.0"
 
 [tool.poetry.group.dev.dependencies]
