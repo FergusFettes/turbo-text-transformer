@@ -130,6 +130,7 @@ def chunk(prompt, verbose, params):
 @click.option("--verbose", "-v", help="Verbose output", is_flag=True, default=False)
 @click.option("--list_models", "-l", help="List available models.", is_flag=True, default=False)
 @click.option("--prompt_file", "-P", help="File to load for the prompt", default=None)
+@click.option("--append", "-A", help="Append to the prompt file", is_flag=True, default=False)
 @click.option("--template_file", "-t", help="Template to apply to prompt.", default=None, type=str)
 @click.option("--template_args", "-x", help="Extra values for the template.", default="")
 @click.option("--chunk_size", "-c", help="Max size of chunks", default=None, type=int)
@@ -153,6 +154,7 @@ def main(
     verbose,
     list_models,
     prompt_file,
+    append,
     **params,
 ):
     # click.echo(params, err=True)
@@ -182,6 +184,10 @@ def main(
 
     if params["model"] in oam.list:
         responses = [oam.gen(prompt) for prompt in prompts]
+        if append:
+            with open(prompt_file, "a") as f:
+                f.write("\n".join(responses))
+            return
         sink.write("\n".join(responses))
         return
 
