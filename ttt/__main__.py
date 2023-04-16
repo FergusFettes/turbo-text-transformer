@@ -4,11 +4,11 @@ from pathlib import Path
 
 import click
 from dotenv import load_dotenv
-from gpt_index import GPTListIndex
-from gpt_index.langchain_helpers.memory_wrapper import GPTIndexChatMemory
-from langchain.agents import initialize_agent
+from gpt_index import GPTMultiverseIndex
+from gpt_index.readers.schema.base import Document
 from langchain.llms import OpenAI
 from langchain.text_splitter import CharacterTextSplitter
+from tttp.prompter import Prompter
 
 from ttt.chunker import Chunker
 from ttt.config import arg2dict, config, config_path, create_config, load_config, save_config
@@ -17,23 +17,17 @@ from ttt.models import BaseModel, OpenAIModel
 load_dotenv()
 
 
-def run_chat(prompt, model, file):
-    llm = OpenAI(model=model)
+def chat_history(prompt, file, params):
     if file and Path(file).exists():
-        index = GPTListIndex.load_from_disk(file)
+        index = GPTMultiverseIndex.load_from_disk(file)
+        index.extend(Document(f"In: {prompt}"))
     else:
-        index = GPTListIndex([], text_splitter=CharacterTextSplitter())
-    memory = GPTIndexChatMemory(
-        index=index,
-        memory_key="chat_history",
-        query_kwargs={"response_mode": "compact"},
-        # return_source returns source nodes instead of querying index
-        return_source=True,
-    )
-    agent_chain = initialize_agent([], llm, agent="conversational-react-description", memory=memory)
-    response = agent_chain.run(input=prompt)
-    index.save_to_disk(file)
-    return "\n" + response
+        if params["template_file"]:
+            file = Prompter.find_file(params["template_file"])
+            prompter = Prompter(file)
+            prompt = prompter.prompt(prompt, arg2dict(params["template_args"]))
+        index = GPTMultiverseIndex([Document(prompt)])
+    return index
 
 
 def check_config(reinit):
@@ -128,7 +122,6 @@ def chunk(prompt, verbose, params):
 @click.option("--echo_prompt", "-e", help="Echo the pormpt in the output", is_flag=True, default=False)
 @click.option("--cost_only", "-C", help="Estimate the cost of the query", is_flag=True, default=False)
 @click.option("--verbose", "-v", help="Verbose output", is_flag=True, default=False)
-@click.option("--list_models", "-l", help="List available models.", is_flag=True, default=False)
 @click.option("--prompt_file", "-P", help="File to load for the prompt", default=None)
 @click.option("--append", "-A", help="Append to the prompt file", is_flag=True, default=False)
 @click.option("--template_file", "-t", help="Template to apply to prompt.", default=None, type=str)
@@ -152,7 +145,6 @@ def main(
     echo_prompt,
     cost_only,
     verbose,
-    list_models,
     prompt_file,
     append,
     **params,
@@ -164,37 +156,50 @@ def main(
     options = {"params": params, "format": format, "echo_prompt": echo_prompt}
 
     sink = click.get_text_stream("stdout")
-    oam = OpenAIModel(**options)
-    if list_models:
-        sink.write("\n".join(oam.list))
-        return
-
     prompt = get_prompt(prompt, prompt_file, params)
 
     if config["chat"]:
-        response = run_chat(prompt, params["model"], config["chat_file"])
+        history = chat_history(prompt, config["chat_file"], params)
+        prompt = history.__str__()
+        prompt.append("\nOut: ")
+        params["max_tokens"] = 2048
+        if "force" in params:
+            del params["force"]
+        if "template_args" in params:
+            del params["template_args"]
+        if "token_limit" in params:
+            del params["token_limit"]
+        llm = OpenAI(**params)
+        responses = llm.generate([prompt])
+        response = responses.generations[0][0].text
+        if response.startswith("Out: "):
+            response = response[5:]
         sink.write(response)
+        history.extend(Document(f"Out: {response}"))
+        history.save_to_disk(config["chat_file"])
         return
 
-    if cost_only:
-        verbose = True
-    prompts = chunk(prompt, verbose, params)
+    prompts = chunk(prompt, verbose or cost_only, params)
     if cost_only:
         return
 
+    oam = OpenAIModel(**options)
     if params["model"] in oam.list:
         responses = [oam.gen(prompt) for prompt in prompts]
         if append:
             with open(prompt_file, "a") as f:
                 f.write("\n".join(responses))
             return
-        sink.write("\n".join(responses))
-        return
-
-    if params["model"] == "test":
+        response = "\n".join(responses)
+    elif params["model"] == "test":
         bm = BaseModel(**options)
         responses = [bm.gen(prompt) for prompt in prompts]
-        sink.write("\n".join(responses))
-        return
+        response = "\n".join(responses)
+    else:
+        click.echo("Model not found. Use the -l flag to list available models.", err=True, color="red")
 
-    click.echo("Model not found. Use the -l flag to list available models.", err=True, color="red")
+    if config["chat"]:
+        history.extend(Document(f"Out: {response}"))
+        history.save_to_disk(config["chat_file"])
+
+    sink.write("\n".join(responses))
