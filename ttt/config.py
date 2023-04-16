@@ -2,6 +2,7 @@ import datetime
 import logging
 from pathlib import Path
 
+import click
 import tiktoken
 import tttp
 import yaml
@@ -54,10 +55,36 @@ def create_config():
             (templates / template.name).write_text(template.read_text())
 
 
+def create_openai_config(api_key):
+    path = config_dir / "openai.yaml"
+
+    config = {
+        "engine_params": OPENAI_DEFAULT_PARAMS,
+        "api_key": api_key,
+        "backup_path": str(config.get("backup_path", "/tmp/ttt/")),
+        "models": [],
+    }
+    path.write_text(yaml.dump(config))
+
+
+def check_config(reinit):
+    """Check that the config file exists."""
+    if not reinit and config_path.exists():
+        return config
+
+    click.echo("Config file not found. Creating one for you...", err=True, color="red")
+    create_config()
+    openai_api_key = click.prompt("OpenAI API Key", type=str)
+    if openai_api_key:
+        create_openai_config(openai_api_key)
+
+    return load_config()
+
+
 def get_encoding(model):
     try:
         encoding = tiktoken.encoding_for_model(model)
-    except KeyError:
+    except (KeyError, ValueError):
         encoding = tiktoken.get_encoding("gpt2")
     return encoding
 
@@ -88,3 +115,12 @@ def arg2dict(args):
         k, v = arg.split("=")
         d[k] = v
     return d
+
+
+model_tokens = {
+    "gpt-4": 4096 - 8,
+    "gpt-3.5-turbo": 4096 - 8,
+    "text-davinci-003": 4096 - 8,
+    "text-davinci-002": 4096 - 8,
+    "code-davinci-002": 4096 - 8,
+}

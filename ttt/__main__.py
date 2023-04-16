@@ -4,47 +4,15 @@ from pathlib import Path
 
 import click
 from dotenv import load_dotenv
-from gpt_index import GPTMultiverseIndex
-from gpt_index.readers.schema.base import Document
 from langchain.llms import OpenAI
-from langchain.text_splitter import CharacterTextSplitter
+# from langchain.text_splitter import CharacterTextSplitter
 from tttp.prompter import Prompter
 
-from ttt.chunker import Chunker
-from ttt.config import arg2dict, config, config_path, create_config, load_config, save_config
-from ttt.models import BaseModel, OpenAIModel
+# from ttt.chunker import Chunker
+from ttt.config import arg2dict, check_config, get_encoding, model_tokens, save_config
+from ttt.tree import DummyTree, Tree
 
 load_dotenv()
-
-
-def load_history(file):
-    if file and Path(file).exists():
-        index = GPTMultiverseIndex.load_from_disk(file)
-        return index
-
-
-def init_history(prompt, file, params):
-    if params["template_file"]:
-        file = Prompter.find_file(params["template_file"])
-        prompter = Prompter(file)
-        prompt = prompter.prompt(prompt, arg2dict(params["template_args"]))
-    return GPTMultiverseIndex([Document(prompt)])
-
-
-def check_config(reinit):
-    """Check that the config file exists."""
-    if not reinit and config_path.exists():
-        return config
-
-    click.echo("Config file not found. Creating one for you...", err=True, color="red")
-    create_config()
-    openai_api_key = click.prompt("OpenAI API Key", type=str)
-    if openai_api_key:
-        OpenAIModel.create_config(openai_api_key)
-
-    # Same for other providers...
-
-    return load_config()
 
 
 def check_chat(toggle, default, config):
@@ -62,23 +30,17 @@ def check_chat(toggle, default, config):
         click.echo(f"Chat mode is on. Using {config['chat_file']} as the chat history file.", err=True)
 
 
-def prepare_engine_params(params, format):
+def prepare_engine_params(params):
     """Prepare options for the OpenAI API."""
     params = {k: v for k, v in params.items() if v is not None}
 
-    params["token_limit"] = 4000 if params["model"] in OpenAIModel().large_models else 2048
+    params["max_tokens"] = model_tokens.get(params["model"], 2048)
     if "number" in params:
         params["n"] = params.pop("number")
-    if "logprobs" in params and params["logprobs"] == 0:
-        if format == "logprobs":
-            # If format is logprobs, we need to get the logprobs
-            params["logprobs"] = 1
-        else:
-            params["logprobs"] = None
     return params
 
 
-def get_prompt(prompt, prompt_file, params):
+def get_prompt(prompt, prompt_file):
     """Get the prompt from stdin if it's not provided."""
     if prompt_file:
         prompt = Path(prompt_file).read_text().strip()
@@ -90,155 +52,83 @@ def get_prompt(prompt, prompt_file, params):
         if not prompt:
             click.echo("No prompt provided. Use the -p flag or pipe a prompt to stdin.", err=True, color="red")
             raise click.Abort()
-        params["force"] = True
     return prompt
 
 
-def chunk(prompt, verbose, params):
-    prompt_args = arg2dict(params["template_args"])
-    chunker = Chunker(prompt, verbose=verbose, params=params)
-    if chunker.needs_chunking():
-        if not params["force"]:
-            click.confirm("Do you want to chunk the prompt?", abort=True, err=True)
-        click.echo("Chunking...", err=True)
-        return chunker.chunk()
-    if chunker.template_size:
-        return [chunker.prompter.prompt(prompt, prompt_args)]
-    return [prompt]
+def simple_gen(tree):
+    llm = OpenAI(**tree.params)
+    responses = llm.generate([tree.prompt])
+    return responses.generations[0][0].text
 
 
-def do_chat(prompt, sink, verbose, config, params):
-    if prompt.startswith("::"):
-        commands = prompt.split("::")[1]
-        prompt = prompt.split("::")[2]
-    history = load_history(config["chat_file"])
-    _init = False
-    if not history:
-        _init = True
-        history = init_history(prompt, config["chat_file"], params)
-    tree_commands(commands, history)
-    if not _init:
-        history.extend(Document(f"In: {prompt}"))
-    prompt = history.__str__()
-    if verbose:
-        click.echo("History:", err=True)
-        click.echo(history.index_struct, err=True)
-    prompt += "\nOut: "
-    params["max_tokens"] = 2048
-    if "force" in params:
-        del params["force"]
-    if "template_args" in params:
-        del params["template_args"]
-    if "token_limit" in params:
-        del params["token_limit"]
-    llm = OpenAI(**params)
-    responses = llm.generate([prompt])
-    response = responses.generations[0][0].text
-    if response.startswith("Out: "):
-        response = response[5:]
+def init(reinit, toggle_chat, default_chat, prompt, prompter, params):
+    # click.echo(params, err=True)
+    config = check_config(reinit)
+    check_chat(toggle_chat, default_chat, config)
+    params = prepare_engine_params(params)
+
+    if config["chat"]:
+        tree = Tree(config["chat_file"], params=params)
+        prompt = tree.get_and_run_commands(prompt)
+    else:
+        tree = DummyTree(params=params)
+
+    # If its a simple gen or it is the first item in a new tree, apply the prompt
+    if len(tree) == 0 and prompter is not None:
+        prompt = prompter.prompt(prompt)
+
+    tree.input(prompt)
+    return tree
+
+
+def handle_return(response, prompt, prompt_file):
+    if prompt_file:
+        with open(prompt_file, "a") as f:
+            f.write("\n".join(response))
+        return
+    sink = click.get_text_stream("stdout")
+    if prompt:
+        sink.write(prompt + "\n")
     sink.write(response)
-    history.extend(Document(f"Out: {response}"))
-    history.save_to_disk(config["chat_file"])
 
 
-def tree_commands(commands, history):
-    """Commands can be the following:
-    tag:tag_name
-    checkout:[int or tag_name]
-    display
-    """
-    parsed_commands = commands.split(",")
-    for command in parsed_commands:
-        if command.startswith("tag:"):
-            tag = command.split(":")[1]
-            history.tag(tag)
-        elif command.startswith("checkout:"):
-            tag = command.split(":")[1]
-            if tag.isdigit():
-                history.checkout(int(tag))
-            else:
-                history.checkout(tag)
-        elif command == "display":
-            click.echo(history.index_struct)
+def response_length(tree):
+    encoding = get_encoding(tree.params.get("model", "gpt-3.5-turbo"))
+    tree.params["max_tokens"] -= len(encoding.encode(tree.prompt))
 
 
 @click.command()
 @click.argument("prompt", required=False)
-@click.option(
-    "--format",
-    "-f",
-    help="Output Format",
-    default="clean",
-    type=click.Choice(["clean", "json", "logprobs"]),
-    show_default=True,
-)
 @click.option("--toggle_chat", "-H", help="Set chat mode on/off", is_flag=True, default=False)
 @click.option("--default_chat", "-d", help="Set default chat.", default="")
 @click.option("--reinit", "-R", help="Recreate the config files", is_flag=True, default=False)
 @click.option("--echo_prompt", "-e", help="Echo the pormpt in the output", is_flag=True, default=False)
-@click.option("--cost_only", "-C", help="Estimate the cost of the query", is_flag=True, default=False)
-@click.option("--verbose", "-v", help="Verbose output", is_flag=True, default=False)
 @click.option("--prompt_file", "-P", help="File to load for the prompt", default=None)
 @click.option("--append", "-A", help="Append to the prompt file", is_flag=True, default=False)
 @click.option("--template_file", "-t", help="Template to apply to prompt.", default=None, type=str)
 @click.option("--template_args", "-x", help="Extra values for the template.", default="")
-@click.option("--chunk_size", "-c", help="Max size of chunks", default=None, type=int)
-@click.option("--summary_size", "-s", help="Size of chunk summaries", default=None, type=int)
 @click.option("--model", "-m", help="Name of the model to use.", default="gpt-3.5-turbo")
 @click.option("--number", "-N,n", help="Number of completions.", default=None, type=int)
-@click.option("--logprobs", "-L", help="Show logprobs for completion", default=None, type=int)
 @click.option("--max_tokens", "-M", help="Max number of tokens to return", default=None, type=int)
 @click.option(
     "--temperature", "-T", help="Temperature, [0, 2]-- 0 is deterministic, >0.9 is creative.", default=None, type=int
 )
-@click.option("--force", "-F", help="Force chunking of prompt", is_flag=True, default=False)
 def main(
     prompt,
-    format,
     toggle_chat,
     default_chat,
     reinit,
     echo_prompt,
-    cost_only,
-    verbose,
     prompt_file,
     append,
+    template_file,
+    template_args,
     **params,
 ):
-    # click.echo(params, err=True)
-    config = check_config(reinit)
-    check_chat(toggle_chat, default_chat, config)
-    params = prepare_engine_params(params, format)
-    options = {"params": params, "format": format, "echo_prompt": echo_prompt}
+    prompt = get_prompt(prompt, prompt_file)
+    prompter = Prompter.from_file(template_file, arg2dict(template_args)) if template_file else None
+    tree = init(reinit, toggle_chat, default_chat, prompt, prompter, params)
+    response_length(tree)
 
-    sink = click.get_text_stream("stdout")
-    prompt = get_prompt(prompt, prompt_file, params)
-
-    if config["chat"]:
-        do_chat(prompt, sink, verbose, config, params)
-        return
-
-    prompts = chunk(prompt, verbose or cost_only, params)
-    if cost_only:
-        return
-
-    oam = OpenAIModel(**options)
-    if params["model"] in oam.list:
-        responses = [oam.gen(prompt) for prompt in prompts]
-        if append:
-            with open(prompt_file, "a") as f:
-                f.write("\n".join(responses))
-            return
-        response = "\n".join(responses)
-    elif params["model"] == "test":
-        bm = BaseModel(**options)
-        responses = [bm.gen(prompt) for prompt in prompts]
-        response = "\n".join(responses)
-    else:
-        click.echo("Model not found. Use the -l flag to list available models.", err=True, color="red")
-
-    if config["chat"]:
-        history.extend(Document(f"Out: {response}"))
-        history.save_to_disk(config["chat_file"])
-
-    sink.write("\n".join(responses))
+    response = tree.prompt if params["model"] == "test" else simple_gen(tree)
+    handle_return(response, prompt if echo_prompt else None, prompt_file if append else None)
