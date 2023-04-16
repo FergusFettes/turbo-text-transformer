@@ -17,17 +17,18 @@ from ttt.models import BaseModel, OpenAIModel
 load_dotenv()
 
 
-def chat_history(prompt, file, params):
+def load_history(file):
     if file and Path(file).exists():
         index = GPTMultiverseIndex.load_from_disk(file)
-        index.extend(Document(f"In: {prompt}"))
-    else:
-        if params["template_file"]:
-            file = Prompter.find_file(params["template_file"])
-            prompter = Prompter(file)
-            prompt = prompter.prompt(prompt, arg2dict(params["template_args"]))
-        index = GPTMultiverseIndex([Document(prompt)])
-    return index
+        return index
+
+
+def init_history(prompt, file, params):
+    if params["template_file"]:
+        file = Prompter.find_file(params["template_file"])
+        prompter = Prompter(file)
+        prompt = prompter.prompt(prompt, arg2dict(params["template_args"]))
+    return GPTMultiverseIndex([Document(prompt)])
 
 
 def check_config(reinit):
@@ -106,6 +107,61 @@ def chunk(prompt, verbose, params):
     return [prompt]
 
 
+def do_chat(prompt, sink, verbose, config, params):
+    if prompt.startswith("::"):
+        commands = prompt.split("::")[1]
+        prompt = prompt.split("::")[2]
+    history = load_history(config["chat_file"])
+    _init = False
+    if not history:
+        _init = True
+        history = init_history(prompt, config["chat_file"], params)
+    tree_commands(commands, history)
+    if not _init:
+        history.extend(Document(f"In: {prompt}"))
+    prompt = history.__str__()
+    if verbose:
+        click.echo("History:", err=True)
+        click.echo(history.index_struct, err=True)
+    prompt += "\nOut: "
+    params["max_tokens"] = 2048
+    if "force" in params:
+        del params["force"]
+    if "template_args" in params:
+        del params["template_args"]
+    if "token_limit" in params:
+        del params["token_limit"]
+    llm = OpenAI(**params)
+    responses = llm.generate([prompt])
+    response = responses.generations[0][0].text
+    if response.startswith("Out: "):
+        response = response[5:]
+    sink.write(response)
+    history.extend(Document(f"Out: {response}"))
+    history.save_to_disk(config["chat_file"])
+
+
+def tree_commands(commands, history):
+    """Commands can be the following:
+    tag:tag_name
+    checkout:[int or tag_name]
+    display
+    """
+    parsed_commands = commands.split(",")
+    for command in parsed_commands:
+        if command.startswith("tag:"):
+            tag = command.split(":")[1]
+            history.tag(tag)
+        elif command.startswith("checkout:"):
+            tag = command.split(":")[1]
+            if tag.isdigit():
+                history.checkout(int(tag))
+            else:
+                history.checkout(tag)
+        elif command == "display":
+            click.echo(history.index_struct)
+
+
 @click.command()
 @click.argument("prompt", required=False)
 @click.option(
@@ -159,24 +215,7 @@ def main(
     prompt = get_prompt(prompt, prompt_file, params)
 
     if config["chat"]:
-        history = chat_history(prompt, config["chat_file"], params)
-        prompt = history.__str__()
-        prompt.append("\nOut: ")
-        params["max_tokens"] = 2048
-        if "force" in params:
-            del params["force"]
-        if "template_args" in params:
-            del params["template_args"]
-        if "token_limit" in params:
-            del params["token_limit"]
-        llm = OpenAI(**params)
-        responses = llm.generate([prompt])
-        response = responses.generations[0][0].text
-        if response.startswith("Out: "):
-            response = response[5:]
-        sink.write(response)
-        history.extend(Document(f"Out: {response}"))
-        history.save_to_disk(config["chat_file"])
+        do_chat(prompt, sink, verbose, config, params)
         return
 
     prompts = chunk(prompt, verbose or cost_only, params)
