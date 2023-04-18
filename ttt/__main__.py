@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 
+from pathlib import Path
+
 import click
 from langchain.llms import OpenAI
 from tttp.prompter import Prompter
 
 from ttt.config import Config
 from ttt.io import IO
+from ttt.store import Store
 from ttt.tree import DummyTree, Tree
 
 
@@ -15,9 +18,8 @@ def simple_gen(tree):
     return responses.generations[0][0].text
 
 
-def init(reinit, toggle_chat, default_chat, prompt, prompter, params):
-    config = Config.check_config(reinit)
-    Config.check_chat(toggle_chat, default_chat, config)
+def init(prompt, prompter, params):
+    config = Config.check_config()
     params = Config.prepare_engine_params(params)
 
     if config["chat"]:
@@ -40,10 +42,35 @@ def response_length(tree):
 
 
 @click.command()
-@click.argument("prompt", required=False)
-@click.option("--toggle_chat", "-H", help="Set chat mode on/off", is_flag=True, default=False)
+@click.option("--toggle_chat", "-t", help="Set chat mode on/off", is_flag=True, default=False)
 @click.option("--default_chat", "-d", help="Set default chat.", default="")
+@click.option("--list", "-l", help="List available chats.", is_flag=True, default=False)
+def store(toggle_chat, default_chat, list):
+    config = Config.check_config()
+    Config.check_chat(toggle_chat, default_chat, config)
+    if list:
+        Store(config=config).list_chats()
+
+
+@click.command()
+@click.option("--toggle_template", "-t", help="Set template mode on/off", is_flag=True, default=False)
+@click.option("--default_template", "-d", help="Set default template.", default="")
+@click.option("--list", "-l", help="List available templates.", is_flag=True, default=False)
+def template(toggle_template, default_template, list):
+    config = Config.check_config()
+    Config.check_template(toggle_template, default_template, config)
+    if list:
+        Store(config=config).list_templates()
+
+
+@click.command()
 @click.option("--reinit", "-R", help="Recreate the config files", is_flag=True, default=False)
+def config(reinit):
+    Config.check_config(reinit)
+
+
+@click.command()
+@click.argument("prompt", required=False)
 @click.option("--echo_prompt", "-e", help="Echo the pormpt in the output", is_flag=True, default=False)
 @click.option("--prompt_file", "-P", help="File to load for the prompt", default=None)
 @click.option("--append", "-A", help="Append to the prompt file", is_flag=True, default=False)
@@ -55,11 +82,8 @@ def response_length(tree):
 @click.option(
     "--temperature", "-T", help="Temperature, [0, 2]-- 0 is deterministic, >0.9 is creative.", default=None, type=int
 )
-def main(
+def chat(
     prompt,
-    toggle_chat,
-    default_chat,
-    reinit,
     echo_prompt,
     prompt_file,
     append,
@@ -68,10 +92,22 @@ def main(
     **params,
 ):
     prompt = IO.get_prompt(prompt, prompt_file)
-    prompter = Prompter.from_file(template_file, Config.arg2dict(template_args)) if template_file else None
+    template_file = config.template_path / Path(template_file) or config.template_path / config.template_file
+    prompter = Prompter.from_file(str(template_file), Config.arg2dict(template_args)) if config.template else None
 
-    tree = init(reinit, toggle_chat, default_chat, prompt, prompter, params)
+    tree = init(prompt, prompter, params)
     response_length(tree)
 
     response = tree.prompt if params["model"] == "test" else simple_gen(tree)
     IO.return_prompt(response, prompt if echo_prompt else None, prompt_file if append else None)
+
+
+@click.group()
+def main():
+    pass
+
+
+main.add_command(chat)
+main.add_command(store)
+main.add_command(config)
+main.add_command(template)

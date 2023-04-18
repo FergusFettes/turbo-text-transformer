@@ -1,5 +1,6 @@
 import datetime
 import logging
+from dataclasses import dataclass
 from pathlib import Path
 
 import click
@@ -28,6 +29,7 @@ logging.basicConfig(
 logger = logging.getLogger()
 
 
+@dataclass
 class Config:
     model_tokens = {
         "gpt-4": 4096 - 8,
@@ -49,25 +51,26 @@ class Config:
         "top_p": 1,
     }
     config_dir = Path().home() / ".config/ttt"
-    config_path = config_dir / "config.yaml"
+
+    def __post_init__(self):
+        self.config_path = self.config_dir / "config.yaml"
 
     @staticmethod
     def load_config():
         global config
-        if not Config.config_path.exists():
-            config = {}
-            return
-        config = yaml.load(Config.config_path.read_text(), Loader=yaml.Loader)
+        if not Config().config_path.exists():
+            return {}
+        config = yaml.load(Config().config_path.read_text(), Loader=yaml.Loader)
         return config
 
     @staticmethod
     def save_config(config):
-        Config.config_path.write_text(yaml.dump(config))
+        Config().config_path.write_text(yaml.dump(config))
 
     @staticmethod
     def create_config():
         Config.config_dir.mkdir(parents=True, exist_ok=True)
-        Config.config_path.write_text(yaml.dump(Config.TURBO_TEXT_TRANSFORMER_DEFAULT_PARAMS))
+        Config().config_path.write_text(yaml.dump(Config.TURBO_TEXT_TRANSFORMER_DEFAULT_PARAMS))
 
         # Find the templates, and make sure they are in the right place
         tttp_dir = Path(tttp.__file__).parent
@@ -91,9 +94,9 @@ class Config:
         path.write_text(yaml.dump(config))
 
     @staticmethod
-    def check_config(reinit):
+    def check_config(reinit=False):
         """Check that the config file exists."""
-        if not reinit and Config.config_path.exists():
+        if not reinit and Config().config_path.exists():
             return config
 
         click.echo("Config file not found. Creating one for you...", err=True, color="red")
@@ -146,6 +149,21 @@ class Config:
 
         if config["chat"]:
             click.echo(f"Chat mode is on. Using {config['chat_file']} as the chat history file.", err=True)
+
+    @staticmethod
+    def check_template(toggle, default, config):
+        if toggle:
+            config["template"] = not config["template"]
+            click.echo(f"Template mode is now {'on' if config['template'] else 'off'}.", err=True)
+
+        if default:
+            config["template_file"] = default
+
+        if config["template"] or config["template_file"]:
+            Config.save_config(config)
+
+        if config["template"]:
+            click.echo(f"Template mode is on. Using {config['template_file']} as the template file.", err=True)
 
 
 Config.load_config()
