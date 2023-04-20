@@ -136,19 +136,21 @@ class Config:
         return params
 
     @staticmethod
-    def check_chat(toggle, default, config):
+    def check_file(toggle, default, config):
         if toggle:
-            config["chat"] = not config["chat"]
-            click.echo(f"Chat mode is now {'on' if config['chat'] else 'off'}.", err=True)
+            config["file"] = not config["file"]
+            click.echo(f"File mode is now {'on' if config['file'] else 'off'}.", err=True)
 
         if default:
-            config["chat_file"] = default
+            config["chat_name"] = default
 
-        if config["chat"] or config["chat_file"]:
+        if toggle or config["chat_name"]:
             Config.save_config(config)
 
-        if config["chat"]:
-            click.echo(f"Chat mode is on. Using {config['chat_file']} as the chat history file.", err=True)
+        if config["file"]:
+            click.echo(f"File mode is on. Using {config['chat_name']} as the chat history file.", err=True)
+        else:
+            click.echo(f"File mode is off.", err=True)
 
     @staticmethod
     def check_template(toggle, default, config):
@@ -159,11 +161,30 @@ class Config:
         if default:
             config["template_file"] = default
 
-        if config["template"] or config["template_file"]:
+        if toggle or config["template_file"]:
             Config.save_config(config)
 
         if config["template"]:
             click.echo(f"Template mode is on. Using {config['template_file']} as the template file.", err=True)
+        else:
+            click.echo(f"Template mode is off.", err=True)
+
+    @staticmethod
+    def check_db(toggle, default, config):
+        if toggle:
+            config["db"] = not config["db"]
+            click.echo(f"DB mode is now {'on' if config['db'] else 'off'}.", err=True)
+
+        if default:
+            config["db_file"] = default
+
+        if toggle or config["db_file"]:
+            Config.save_config(config)
+
+        if config["db"]:
+            click.echo(f"DB mode is on. Using {config['db_file']} as the database file.", err=True)
+        else:
+            click.echo(f"DB mode is off.", err=True)
 
 
 Config.load_config()

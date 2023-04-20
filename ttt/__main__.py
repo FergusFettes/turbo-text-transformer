@@ -1,66 +1,24 @@
 #!/usr/bin/env python3
 
-from pathlib import Path
-
 import click
 from langchain.llms import OpenAI
-from tttp.prompter import Prompter
 
 from ttt.config import Config
 from ttt.io import IO
 from ttt.store import Store
-from ttt.tree import DummyTree, Tree
+from ttt.tree import Tree
 
 
 def simple_gen(tree):
+    response_length(tree)
     llm = OpenAI(**tree.params)
     responses = llm.generate([tree.prompt])
     return responses.generations[0][0].text
 
 
-def init(prompt, prompter, params):
-    config = Config.check_config()
-    params = Config.prepare_engine_params(params)
-
-    if config["chat"]:
-        tree = Tree(config["chat_file"], params=params)
-        prompt = tree.get_and_run_commands(prompt)
-    else:
-        tree = DummyTree(params=params)
-
-    # If its a simple gen or it is the first item in a new tree, apply the prompt
-    if len(tree) == 0 and prompter is not None:
-        prompt = prompter.prompt(prompt)
-
-    tree.input(prompt)
-    return tree
-
-
 def response_length(tree):
     encoding = Config.get_encoding(tree.params.get("model", "gpt-3.5-turbo"))
     tree.params["max_tokens"] -= len(encoding.encode(tree.prompt))
-
-
-@click.command()
-@click.option("--toggle_chat", "-t", help="Set chat mode on/off", is_flag=True, default=False)
-@click.option("--default_chat", "-d", help="Set default chat.", default="")
-@click.option("--list", "-l", help="List available chats.", is_flag=True, default=False)
-def store(toggle_chat, default_chat, list):
-    config = Config.check_config()
-    Config.check_chat(toggle_chat, default_chat, config)
-    if list:
-        Store(config=config).list_chats()
-
-
-@click.command()
-@click.option("--toggle_template", "-t", help="Set template mode on/off", is_flag=True, default=False)
-@click.option("--default_template", "-d", help="Set default template.", default="")
-@click.option("--list", "-l", help="List available templates.", is_flag=True, default=False)
-def template(toggle_template, default_template, list):
-    config = Config.check_config()
-    Config.check_template(toggle_template, default_template, config)
-    if list:
-        Store(config=config).list_templates()
 
 
 @click.command()
@@ -92,14 +50,14 @@ def chat(
     **params,
 ):
     prompt = IO.get_prompt(prompt, prompt_file)
-    template_file = config.template_path / Path(template_file) or config.template_path / config.template_file
-    prompter = Prompter.from_file(str(template_file), Config.arg2dict(template_args)) if config.template else None
-
-    tree = init(prompt, prompter, params)
-    response_length(tree)
+    config = Config.check_config()
+    store = Store(config=config)
+    prompter = store.get_prompter(template_file, template_args)
+    tree = store.get_tree(prompt, prompter, params)
 
     response = tree.prompt if params["model"] == "test" else simple_gen(tree)
     IO.return_prompt(response, prompt if echo_prompt else None, prompt_file if append else None)
+    tree.output(response)
 
 
 @click.group()
@@ -108,6 +66,7 @@ def main():
 
 
 main.add_command(chat)
-main.add_command(store)
+main.add_command(Store.file)
 main.add_command(config)
-main.add_command(template)
+main.add_command(Store.template)
+main.add_command(Store.tree)
