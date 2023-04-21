@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "turbo-text-transformer"
-version = "0.1.6"
+version = "0.1.7"
 description = ""
 authors = ["fergus <fergusfettes@gmail.com>"]
 homepage = "https://github.com/fergusfettes/turbo-text-transformer"
@@ -30,7 +30,7 @@ ttt = "ttt.__main__:main"
 
 [project]
 name = "turbo-text-transformer"
-version = "0.1.6"
+version = "0.1.7"
 dynamic = ["dependencies"]
 
 [tool.setuptools.dynamic]
