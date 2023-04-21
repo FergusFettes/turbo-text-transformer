@@ -72,6 +72,8 @@ class Store:
         return DummyTree()
 
     def get_prompter(self, template_file, template_args):
+        if not self.config["template"]:
+            return None
         if template_file:
             self.template_file = self.template_path / Path(template_file)
         if self.template_file.exists():
@@ -121,7 +123,8 @@ class Store:
     @click.option("--new", "-n", is_flag=True, help="Create a new root")
     @click.option("--tag", "-t", help="Tag the current tree")
     @click.option("--checkout", "-c", help="Checkout a tree by tag or index")
-    def tree(display, display_all, new, tag, checkout):
+    @click.option("--export", "-x", help="Export to a file", default="export.md")
+    def tree(display, display_all, new, tag, checkout, export):
         """Tree command"""
         config = Config.check_config()
         store = Store(config=config)
@@ -149,3 +152,7 @@ class Store:
                 click.echo(tree.index.index_struct)
             elif display_all:
                 click.echo(tree.index.index_struct.get_full_repr())
+
+        if export:
+            with open(export, "w") as fi:
+                fi.write(str(tree.index))

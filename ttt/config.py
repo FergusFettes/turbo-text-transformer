@@ -1,5 +1,6 @@
 import datetime
 import logging
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -7,9 +8,6 @@ import click
 import tiktoken
 import tttp
 import yaml
-from dotenv import load_dotenv
-
-load_dotenv()
 
 file_path = Path("/tmp/ttt/")
 file_path.mkdir(parents=True, exist_ok=True)
@@ -96,6 +94,8 @@ class Config:
     @staticmethod
     def check_config(reinit=False):
         """Check that the config file exists."""
+        openai_config = Config.load_openai_config()
+        os.environ["OPENAI_API_KEY"] = openai_config["api_key"]
         if not reinit and Config().config_path.exists():
             return config
 
@@ -106,6 +106,11 @@ class Config:
             Config.create_openai_config(openai_api_key)
 
         return Config.load_config()
+
+    @staticmethod
+    def load_openai_config():
+        path = Config.config_dir / "openai.yaml"
+        return yaml.load(path.read_text(), Loader=yaml.Loader)
 
     @staticmethod
     def get_encoding(model):

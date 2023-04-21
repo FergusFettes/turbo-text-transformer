@@ -6,7 +6,6 @@ from langchain.llms import OpenAI
 from ttt.config import Config
 from ttt.io import IO
 from ttt.store import Store
-from ttt.tree import Tree
 
 
 def simple_gen(tree):

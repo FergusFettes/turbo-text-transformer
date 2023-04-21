@@ -21,7 +21,7 @@ class IO:
     def return_prompt(response, prompt, prompt_file):
         if prompt_file:
             with open(prompt_file, "a") as f:
-                f.write("\n".join(response))
+                f.write(response)
             return
         sink = click.get_text_stream("stdout")
         if prompt:
