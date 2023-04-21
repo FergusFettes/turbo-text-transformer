@@ -139,7 +139,6 @@ class Config:
     def check_file(toggle, default, config):
         if toggle:
             config["file"] = not config["file"]
-            click.echo(f"File mode is now {'on' if config['file'] else 'off'}.", err=True)
 
         if default:
             config["chat_name"] = default
@@ -156,7 +155,6 @@ class Config:
     def check_template(toggle, default, config):
         if toggle:
             config["template"] = not config["template"]
-            click.echo(f"Template mode is now {'on' if config['template'] else 'off'}.", err=True)
 
         if default:
             config["template_file"] = default
@@ -168,23 +166,6 @@ class Config:
             click.echo(f"Template mode is on. Using {config['template_file']} as the template file.", err=True)
         else:
             click.echo(f"Template mode is off.", err=True)
-
-    @staticmethod
-    def check_db(toggle, default, config):
-        if toggle:
-            config["db"] = not config["db"]
-            click.echo(f"DB mode is now {'on' if config['db'] else 'off'}.", err=True)
-
-        if default:
-            config["db_file"] = default
-
-        if toggle or config["db_file"]:
-            Config.save_config(config)
-
-        if config["db"]:
-            click.echo(f"DB mode is on. Using {config['db_file']} as the database file.", err=True)
-        else:
-            click.echo(f"DB mode is off.", err=True)
 
 
 Config.load_config()

@@ -29,7 +29,7 @@ def config(reinit):
 
 @click.command()
 @click.argument("prompt", required=False)
-@click.option("--echo_prompt", "-e", help="Echo the pormpt in the output", is_flag=True, default=False)
+@click.option("--echo_prompt", "-e", help="Echo the prompt in the output", is_flag=True, default=False)
 @click.option("--prompt_file", "-P", help="File to load for the prompt", default=None)
 @click.option("--append", "-A", help="Append to the prompt file", is_flag=True, default=False)
 @click.option("--template_file", "-t", help="Template to apply to prompt.", default=None, type=str)
