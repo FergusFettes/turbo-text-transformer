@@ -1,23 +1,27 @@
 #!/usr/bin/env python3
 
+import os
+
 import click
+from dotenv import load_dotenv
 from langchain.llms import OpenAI
 
 from ttt.config import Config
 from ttt.io import IO
 from ttt.store import Store
 
+load_dotenv()
+
 
 def simple_gen(tree):
-    response_length(tree)
+    encoding = Config.get_encoding(tree.params.get("model", "gpt-3.5-turbo"))
+    tree.params["max_tokens"] -= len(encoding.encode(tree.prompt))
+    if tree.params["model"] == "code-davinci-002":
+        tree.params["openai_api_base"] = os.environ.get("CD2_URL")
+        tree.params["openai_api_key"] = os.environ.get("CD2_KEY")
     llm = OpenAI(**tree.params)
     responses = llm.generate([tree.prompt])
     return responses.generations[0][0].text
-
-
-def response_length(tree):
-    encoding = Config.get_encoding(tree.params.get("model", "gpt-3.5-turbo"))
-    tree.params["max_tokens"] -= len(encoding.encode(tree.prompt))
 
 
 @click.command()
@@ -69,3 +73,4 @@ main.add_command(Store.file)
 main.add_command(config)
 main.add_command(Store.template)
 main.add_command(Store.tree)
+main.add_command(Store.repl)

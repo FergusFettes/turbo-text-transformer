@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Optional
 
 import click
+from langchain.llms import OpenAI
 from tttp.prompter import Prompter
 
 from ttt.config import Config
@@ -71,7 +72,7 @@ class Store:
             return Tree(self.chat_file)
         return DummyTree()
 
-    def get_prompter(self, template_file, template_args):
+    def get_prompter(self, template_file=None, template_args=None):
         if not self.config["template"]:
             return None
         if template_file:
@@ -156,3 +157,92 @@ class Store:
         if export:
             with open(export, "w") as fi:
                 fi.write(str(tree.index))
+
+    @staticmethod
+    @click.command()
+    def repl():
+        config = Config.check_config()
+        params = Config.load_openai_config()["engine_params"]
+        store = Store(config=config)
+        tree = store.load_file()
+        tree.params = params
+
+        while True:
+            command = input(">> ")
+            if command == "q":
+                break
+
+            if command in "hjkl":
+                tree.index.step(command)
+                command = "d"
+
+            if command == "d":
+                click.echo(tree.index.index_struct)
+                continue
+
+            if command == "a":
+                click.echo(tree.index.index_struct.get_full_repr())
+                continue
+
+            if command == "n":
+                tree.index.clear_checkout()
+                continue
+
+            if command == "context":
+                click.echo(tree.index.context)
+                continue
+
+            if command.startswith("tag"):
+                tree.index.tag(command.split(" ")[1])
+                continue
+
+            if command.startswith("checkout"):
+                checkout = command.split(" ")[1]
+                if checkout.isdigit():
+                    checkout = int(checkout)
+                tree.index.checkout(checkout)
+                continue
+
+            if command == "show":
+                click.echo(tree.index.short_path())
+                continue
+
+            if command == "show all":
+                click.echo(tree.index)
+                continue
+
+            if command.startswith("context add"):
+                # If no context is given, just add the last node as context
+                if command == "context add":
+                    new_context = tree.index.path[-1].text
+                else:
+                    new_context = command.split(" ")[2:]
+                tree.index.add_context(new_context, tree.index.path[-1])
+                continue
+
+            if command == "summary":
+                click.echo(tree.index.last_summary)
+                continue
+
+            # Finally, assume the context is a prompt and pass it in
+            prompt = command
+            prompter = store.get_prompter()
+            if len(tree) == 0 and prompter is not None:
+                prompt = prompter.prompt(prompt)
+
+            tree.input(prompt)
+            response = tree.prompt if tree.params["model"] == "test" else simple_gen(tree)
+
+            click.echo(response)
+            tree.output(response)
+
+
+def simple_gen(tree):
+    encoding = Config.get_encoding(tree.params.get("model", "gpt-3.5-turbo"))
+    tree.params["max_tokens"] -= len(encoding.encode(tree.prompt))
+    if tree.params["model"] == "code-davinci-002":
+        tree.params["openai_api_base"] = os.environ.get("CD2_URL")
+        tree.params["openai_api_key"] = os.environ.get("CD2_KEY")
+    llm = OpenAI(**tree.params)
+    responses = llm.generate([tree.prompt])
+    return responses.generations[0][0].text

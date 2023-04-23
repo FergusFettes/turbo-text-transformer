@@ -123,6 +123,8 @@ class Config:
     @staticmethod
     def arg2dict(args):
         d = {}
+        if not args:
+            return d
         if "=" not in args:
             return d
         for arg in args.split(","):
