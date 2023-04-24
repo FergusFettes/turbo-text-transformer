@@ -40,7 +40,7 @@ class Tree:
 
     @property
     def prompt(self):
-        prompt = self.index.__str__()
+        prompt = self.index.context + "\n" + self.index.__str__()
         prompt += f"\n"
         return prompt
 

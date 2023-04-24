@@ -1,4 +1,5 @@
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -188,6 +189,31 @@ class Store:
                 tree.index.clear_checkout()
                 continue
 
+            if command == "p save":
+                config = Config.load_openai_config()
+                config["engine_params"] = tree.params
+                Config.save_openai_config(config)
+                click.echo("Saved.")
+                continue
+
+            if command.startswith("p "):
+                name, value = command.split(" ")[1:]
+                tree.params.update({name: value})
+                command = "p"
+
+            if command == "p":
+                click.echo(tree.params)
+                continue
+
+            if command.startswith("c "):
+                name, value = command.split(" ")[1:]
+                config.update({name: value})
+                command = "c"
+
+            if command == "c":
+                click.echo(config)
+                continue
+
             if command == "context":
                 click.echo(tree.index.context)
                 continue
@@ -208,7 +234,7 @@ class Store:
                 continue
 
             if command == "show all":
-                click.echo(tree.index)
+                click.echo(tree.prompt)
                 continue
 
             if command.startswith("context add"):
@@ -217,6 +243,9 @@ class Store:
                     new_context = tree.index.path[-1].text
                 else:
                     new_context = command.split(" ")[2:]
+                    if Path(new_context[0]).exists():
+                        new_context = Path(new_context[0]).read_text()
+
                 tree.index.add_context(new_context, tree.index.path[-1])
                 continue
 

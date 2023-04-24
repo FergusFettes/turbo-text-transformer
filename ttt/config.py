@@ -92,6 +92,16 @@ class Config:
         path.write_text(yaml.dump(config))
 
     @staticmethod
+    def load_openai_config():
+        path = Config.config_dir / "openai.yaml"
+        return yaml.load(path.read_text(), Loader=yaml.Loader)
+
+    @staticmethod
+    def save_openai_config(config):
+        path = Config.config_dir / "openai.yaml"
+        path.write_text(yaml.dump(config))
+
+    @staticmethod
     def check_config(reinit=False):
         """Check that the config file exists."""
         openai_config = Config.load_openai_config()
@@ -106,11 +116,6 @@ class Config:
             Config.create_openai_config(openai_api_key)
 
         return Config.load_config()
-
-    @staticmethod
-    def load_openai_config():
-        path = Config.config_dir / "openai.yaml"
-        return yaml.load(path.read_text(), Loader=yaml.Loader)
 
     @staticmethod
     def get_encoding(model):
