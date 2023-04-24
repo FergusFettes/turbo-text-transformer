@@ -486,7 +486,7 @@ files = [
 
 [[package]]
 name = "gpt-index"
-version = "0.5.19"
+version = "0.5.21"
 description = ""
 category = "main"
 optional = false
@@ -511,8 +511,8 @@ tweepy = "^4.13.0"
 [package.source]
 type = "git"
 url = "ssh://git@github.com/fergusfettes/llama_index"
-reference = "v0.5.19"
-resolved_reference = "0a38822344b904691ee2822023a6a330486d87f3"
+reference = "v0.5.21"
+resolved_reference = "4df14455e7fef6e5adeaca868d36393e25cc7eae"
 
 [[package]]
 name = "greenlet"
@@ -2096,4 +2096,4 @@ multidict = ">=4.0"
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.8.1,<3.12"
-content-hash = "17f00bcb1bf02c94438ce84585014aeadefca2ebf2344566ff3781ebe2f0c65f"
+content-hash = "774b4cc8b7dcb0e627ceeb0097ab78c3f17268c8704670615dfacfabbae258d9"

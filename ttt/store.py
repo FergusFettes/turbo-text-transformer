@@ -170,19 +170,24 @@ class Store:
 
         while True:
             command = input(">> ")
+
             if command == "q":
                 break
+
+            if command.isdigit():
+                click.echo(tree.index.index_struct.all_nodes[int(command)].text)
+                continue
 
             if command in "hjkl":
                 tree.index.step(command)
                 command = "d"
 
             if command == "d":
-                click.echo(tree.index.index_struct)
+                click.echo(tree)
                 continue
 
             if command == "a":
-                click.echo(tree.index.index_struct.get_full_repr())
+                click.echo(tree.get_full_repr())
                 continue
 
             if command == "n":
@@ -243,14 +248,50 @@ class Store:
                     new_context = tree.index.path[-1].text
                 else:
                     new_context = command.split(" ")[2:]
-                    if Path(new_context[0]).exists():
-                        new_context = Path(new_context[0]).read_text()
+                    new_context = " ".join(new_context)
 
                 tree.index.add_context(new_context, tree.index.path[-1])
+                tree.save()
+                continue
+
+            if command == "context clear":
+                for node in tree.index.path:
+                    if node.node_info.get("context"):
+                        del node.node_info["context"]
+                tree.save()
+                continue
+
+            if command == "context list":
+                docs = [(tree.index.get_context(node), node.index) for node in tree.index.path]
+                docs = [(doc, index) for doc, index in docs if doc is not None]
+                for doc, index in docs:
+                    doc_text = doc.text.replace("\n", " ")[: tree.termwidth]
+                    click.echo(f"{index}: {doc_text}")
+                continue
+
+            if command.startswith("context remove"):
+                index = int(command.split(" ")[2])
+                tree.index.delete_context(index)
+                tree.save()
                 continue
 
             if command == "summary":
                 click.echo(tree.index.last_summary)
+                continue
+
+            if command == "send":
+                response = tree.prompt if tree.params["model"] == "test" else simple_gen(tree)
+                click.echo(response)
+                tree.output(response)
+                continue
+
+            if command.startswith("nosend"):
+                prompt = command[7:]
+                prompter = store.get_prompter()
+                if len(tree) == 0 and prompter is not None:
+                    prompt = prompter.prompt(prompt)
+                tree.input(prompt)
+                tree.save()
                 continue
 
             # Finally, assume the context is a prompt and pass it in

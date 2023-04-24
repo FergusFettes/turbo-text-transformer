@@ -16,7 +16,7 @@ colored = "^1.4.4"
 tiktoken = "^0.3.0"
 turbo-text-transformer-prompts = "^0.1.10"
 # langchain = {git = "https://github.com/fergusfettes/langchain-1", rev = "fergus-dev"}
-gpt_index = {git = "ssh://git@github.com/fergusfettes/llama_index", rev = "v0.5.19"}
+gpt_index = {git = "ssh://git@github.com/fergusfettes/llama_index", rev = "v0.5.21"}
 python-dotenv = "^1.0.0"
 hyperdb-python = "^0.1.2"
 
