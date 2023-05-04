@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -160,6 +161,209 @@ class Store:
                 fi.write(str(tree.index))
 
     @staticmethod
+    def exit(_, command_params, __):
+        if command_params and command_params[0] == "help":
+            click.echo("Quits! You can also just do Ctrl+C.")
+            return
+        sys.exit(0)
+
+    @staticmethod
+    def params(_, command_params, tree):
+        if command_params and command_params[0] == "help":
+            click.echo(
+                "Show params, or edit them with 'params param=value param=value'. You must run 'params save' to persist changes."
+            )
+            return
+
+        if command_params[0] == "save":
+            config = Config.load_openai_config()
+            config["engine_params"] = tree.params
+            Config.save_openai_config(config)
+            click.echo("Saved.")
+            return
+
+        if command_params:
+            for command in command_params:
+                name, value = command.split("=")
+                tree.params.update({name: value})
+        click.echo(tree.params)
+
+    @staticmethod
+    def move(command, command_params, tree):
+        if command_params and command_params[0] == "help":
+            click.echo("Move around locally in the tree.")
+            return
+        tree.index.step(command)
+        click.echo(tree)
+
+    @staticmethod
+    def config(_, command_params, __):
+        if command_params and command_params[0] == "help":
+            click.echo("Show or modify the config 'config param=value param=value")
+            return
+
+        if command_params:
+            for command in command_params:
+                name, value = command.split("=")
+                config.update({name: value})
+        click.echo(config)
+
+    @staticmethod
+    def display(command, command_params, tree):
+        if command_params and command_params[0] == "help":
+            click.echo(
+                "Display the tree by default, or the context, the path, the last summary, or a specific node (by calling with the nodes index)"
+            )
+            return
+
+        if command == "a":
+            click.echo(tree.get_full_repr())
+            return
+
+        if "context" in command_params:
+            click.echo(tree.index.context)
+            return
+
+        if "path" in command_params:
+            click.echo(tree.index.path)
+            return
+
+        if "prompt" in command_params:
+            click.echo(tree.index.prompt)
+            return
+
+        if "summary" in command_params:
+            click.echo(tree.index.last_summary)
+            return
+
+        for param in command_params:
+            if param.isdigit():
+                click.echo(tree.index.index_struct.all_nodes[int(command)].text)
+                continue
+
+        click.echo(tree)
+
+    @staticmethod
+    def new_node(command, command_params, tree):
+        if command_params and command_params[0] == "help":
+            click.echo(
+                "s[end] X adds a new message to the chain and sends it all.\n"
+                "\t\t\ts[end] on its own sends the existing chain as is\n"
+                "\t\t\tno[send] X adds a new message to the chain but doesn't send it all"
+            )
+            return
+
+        if command_params:
+            prompt = command
+            prompter = store.get_prompter()
+            if len(tree) == 0 and prompter is not None:
+                prompt = prompter.prompt(prompt)
+
+            tree.input(prompt)
+            tree.save()
+
+        if command == "send":
+            response = simple_gen(tree)
+            click.echo(response)
+            tree.output(response)
+
+    @staticmethod
+    def tag(_, command_params, tree):
+        if command_params and command_params[0] == "help":
+            click.echo(
+                "tag X tags the current branch (checkout tags with checkout X)\n" "\t\t\ttag alone shows tag list"
+            )
+            return
+
+        if command_params:
+            "_".join(command_params)
+            tree.index.tag(command_params)
+        click.echo(tree.index.tags)
+
+    @staticmethod
+    def checkout(_, command_params, tree):
+        if command_params and command_params[0] == "help":
+            click.echo("checkout X checks out a tag")
+            return
+
+        if command_params:
+            if checkout.isdigit():
+                checkout = int(checkout)
+            else:
+                checkout = "_".join(command_params)
+            tree.index.checkout(checkout)
+        click.echo(tree)
+
+    @staticmethod
+    def context(_, command_params, tree):
+        if command_params and command_params[0] == "help":
+            click.echo(
+                "modify the context. context can be added to nodes but are not part of the main path\n"
+                "\t\t\tsubcommands are clear, list, remove or add"
+            )
+            return
+
+        if command_params[0] == "clear":
+            for node in tree.index.path:
+                if node.node_info.get("context"):
+                    del node.node_info["context"]
+
+        if command_params[0] == "list":
+            docs = [(tree.index.get_context(node), node.index) for node in tree.index.path]
+            docs = [(doc, index) for doc, index in docs if doc is not None]
+            for doc, index in docs:
+                doc_text = doc.text.replace("\n", " ")[: tree.termwidth]
+                click.echo(f"{index}: {doc_text}")
+            return
+
+        if command_params[0] == "remove":
+            for index in command_params[1:]:
+                tree.index.delete_context(int(index))
+
+        if command_params[0] == "add":
+            # If no context is given, just add the last node as context
+            if len(command_params) == 1:
+                new_context = tree.index.path[-1].text
+            else:
+                new_context = " ".join(command_params[1:])
+
+            tree.index.add_context(new_context, tree.index.path[-1])
+
+        tree.save()
+
+    @staticmethod
+    def edit(_, command_params, tree):
+        if command_params and command_params[0] == "help":
+            click.echo("Edit a node (if no node provided, edit the last one).")
+            return
+
+        if command_params and command_params[0] == "send":
+            new_message = click.edit()
+            Store.new_node("send", new_message.split(" "), tree)
+            return
+
+        if not command_params:
+            index = tree.index.path[-1].index
+
+        input = tree.index.index_struct.all_nodes[index].text
+        output = click.edit(input)
+        tree.index.index_struct.all_nodes[index].text = output
+        click.echo(output)
+
+    @staticmethod
+    def help(_, command_params, ___):
+        done = []
+        for k, v in COMMANDS.items():
+            if v == Store.help:
+                continue
+            if v in done:
+                click.echo(f"{k}:\t\tibid.")
+                continue
+            click.echo(f"{k}:\t\t", nl=False)
+            v("", ["help"], "")
+            done.append(v)
+
+    @staticmethod
     @click.command()
     def repl():
         config = Config.check_config()
@@ -170,144 +374,46 @@ class Store:
 
         while True:
             command = input(">> ")
+            command, *command_params = command.split(" ")
+            if command in COMMANDS:
+                COMMANDS[command](command, command_params, tree)
+            else:
+                click.echo(f"Command {command} not found. Press ? or 'help' for help.")
 
-            if command == "q":
-                break
 
-            if command.isdigit():
-                click.echo(tree.index.index_struct.all_nodes[int(command)].text)
-                continue
-
-            if command in "hjkl":
-                tree.index.step(command)
-                command = "d"
-
-            if command == "d":
-                click.echo(tree)
-                continue
-
-            if command == "a":
-                click.echo(tree.get_full_repr())
-                continue
-
-            if command == "n":
-                tree.index.clear_checkout()
-                continue
-
-            if command == "p save":
-                config = Config.load_openai_config()
-                config["engine_params"] = tree.params
-                Config.save_openai_config(config)
-                click.echo("Saved.")
-                continue
-
-            if command.startswith("p "):
-                name, value = command.split(" ")[1:]
-                tree.params.update({name: value})
-                command = "p"
-
-            if command == "p":
-                click.echo(tree.params)
-                continue
-
-            if command.startswith("c "):
-                name, value = command.split(" ")[1:]
-                config.update({name: value})
-                command = "c"
-
-            if command == "c":
-                click.echo(config)
-                continue
-
-            if command == "context":
-                click.echo(tree.index.context)
-                continue
-
-            if command.startswith("tag"):
-                tree.index.tag(command.split(" ")[1])
-                continue
-
-            if command.startswith("checkout"):
-                checkout = command.split(" ")[1]
-                if checkout.isdigit():
-                    checkout = int(checkout)
-                tree.index.checkout(checkout)
-                continue
-
-            if command == "show":
-                click.echo(tree.index.short_path())
-                continue
-
-            if command == "show all":
-                click.echo(tree.prompt)
-                continue
-
-            if command.startswith("context add"):
-                # If no context is given, just add the last node as context
-                if command == "context add":
-                    new_context = tree.index.path[-1].text
-                else:
-                    new_context = command.split(" ")[2:]
-                    new_context = " ".join(new_context)
-
-                tree.index.add_context(new_context, tree.index.path[-1])
-                tree.save()
-                continue
-
-            if command == "context clear":
-                for node in tree.index.path:
-                    if node.node_info.get("context"):
-                        del node.node_info["context"]
-                tree.save()
-                continue
-
-            if command == "context list":
-                docs = [(tree.index.get_context(node), node.index) for node in tree.index.path]
-                docs = [(doc, index) for doc, index in docs if doc is not None]
-                for doc, index in docs:
-                    doc_text = doc.text.replace("\n", " ")[: tree.termwidth]
-                    click.echo(f"{index}: {doc_text}")
-                continue
-
-            if command.startswith("context remove"):
-                index = int(command.split(" ")[2])
-                tree.index.delete_context(index)
-                tree.save()
-                continue
-
-            if command == "summary":
-                click.echo(tree.index.last_summary)
-                continue
-
-            if command == "send":
-                response = tree.prompt if tree.params["model"] == "test" else simple_gen(tree)
-                click.echo(response)
-                tree.output(response)
-                continue
-
-            if command.startswith("nosend"):
-                prompt = command[7:]
-                prompter = store.get_prompter()
-                if len(tree) == 0 and prompter is not None:
-                    prompt = prompter.prompt(prompt)
-                tree.input(prompt)
-                tree.save()
-                continue
-
-            # Finally, assume the context is a prompt and pass it in
-            prompt = command
-            prompter = store.get_prompter()
-            if len(tree) == 0 and prompter is not None:
-                prompt = prompter.prompt(prompt)
-
-            tree.input(prompt)
-            response = tree.prompt if tree.params["model"] == "test" else simple_gen(tree)
-
-            click.echo(response)
-            tree.output(response)
+COMMANDS = {
+    "q": Store.exit,
+    "p": Store.params,
+    "params": Store.params,
+    "h": Store.move,
+    "j": Store.move,
+    "k": Store.move,
+    "l": Store.move,
+    "d": Store.display,
+    "display": Store.display,
+    "a": Store.display,
+    "display_all": Store.display,
+    "n": lambda _, __, ___: tree.index.clear_checkout() if not len(__) else click.echo("test"),
+    "new": lambda _, __, ___: tree.index.clear_checkout() if not len(__) else click.echo("test"),
+    "c": Store.config,
+    "config": Store.config,
+    "s": Store.new_node,
+    "send": Store.new_node,
+    "no": Store.new_node,
+    "nosend": Store.new_node,
+    "nn": Store.new_node,
+    "t": Store.tag,
+    "tag": Store.tag,
+    "context": Store.context,
+    "e": Store.edit,
+    "?": Store.help,
+    "help": Store.help,
+}
 
 
 def simple_gen(tree):
+    if tree.params["model"] == "trest":
+        return tree.prompt
     encoding = Config.get_encoding(tree.params.get("model", "gpt-3.5-turbo"))
     tree.params["max_tokens"] -= len(encoding.encode(tree.prompt))
     if tree.params["model"] == "code-davinci-002":
