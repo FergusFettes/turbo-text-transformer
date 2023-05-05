@@ -177,7 +177,7 @@ def k(ctx, count):
 
 
 @cli.command()
-@click.argument("type", default="tree")
+@click.argument("type", default="prompt")
 @click.argument("index", default=None, required=False)
 @click.pass_context
 def display(ctx, type, index):
@@ -206,7 +206,7 @@ def display(ctx, type, index):
         return
 
     if type in ["pr", "prompt"]:
-        rich.print(ctx.obj.tree.index.prompt)
+        rich.print(ctx.obj.tree.index)
         return
 
     if type in ["n", "node"]:
@@ -226,6 +226,7 @@ def display(ctx, type, index):
 
 
 cli.add_command(display, "d")
+cli.add_command(display, "p")
 
 
 @cli.command()
@@ -244,6 +245,17 @@ def send(ctx, msg):
 
 
 cli.add_command(send, "s")
+
+
+@cli.command()
+@click.pass_context
+def new(ctx):
+    """n[ew] starts a new chain (a new root)"""
+    ctx.obj.tree.clear_checkout()
+    ctx.obj.tree.save()
+
+
+cli.add_command(new, "n")
 
 
 @cli.command()
@@ -266,6 +278,13 @@ def _append(ctx, msg):
         msg = prompter.prompt(msg)
 
     ctx.obj.tree.input(msg)
+    ctx.obj.tree.save()
+
+
+@cli.command()
+@click.pass_context
+def save(ctx):
+    """Save the current tree"""
     ctx.obj.tree.save()
 
 
@@ -300,7 +319,14 @@ cli.add_command(checkout, "c")
 @click.argument("index", default=None, required=False)
 @click.pass_context
 def edit(ctx, index):
-    "Edit a node (if no node provided, edit the last one)."
+    """Edit a node (if no node provided, edit the last one).\n
+    Or pass "prompt" to export the full tree to an editor.
+    """
+
+    if index in ["prompt", "pr", "p"]:
+        input = str(ctx.obj.tree.index)
+        click.edit(input)
+        return
 
     if not index:
         index = ctx.obj.tree.index.path[-1].index
