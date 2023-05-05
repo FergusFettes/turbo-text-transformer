@@ -5,9 +5,15 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import click
+import rich
 import tiktoken
 import tttp
 import yaml
+from click_shell import shell
+from dotenv import load_dotenv
+
+load_dotenv()
+
 
 file_path = Path("/tmp/ttt/")
 file_path.mkdir(parents=True, exist_ok=True)
@@ -181,3 +187,68 @@ class Config:
 
 
 Config.load_config()
+
+
+@shell(prompt="config> ")
+@click.pass_context
+def cli(ctx):
+    """Manage app config."""
+    rich.print(ctx.obj.config)
+
+
+@cli.command()
+@click.pass_context
+def reinit(ctx):
+    "Recreate the config file from defaults."
+    ctx.obj.config = Config.check_config(reinit)
+
+
+@cli.command()
+@click.pass_context
+def print(ctx):
+    "Print the current config."
+    rich.print(ctx.obj.config)
+
+
+cli.add_command(print, "p")
+
+
+@cli.command()
+@click.pass_context
+def save(ctx):
+    "Save the current config to the config file."
+    Config.save_config(ctx.obj.config)
+
+
+cli.add_command(save, "s")
+
+
+@cli.command()
+@click.argument("name", required=False)
+@click.argument("value", required=False)
+@click.argument("kv", required=False)
+@click.pass_context
+def update(ctx, name, value, kv):
+    "Update a config value, or set of values. (kv in the form of 'name1=value1,name2=value2')"
+    if kv:
+        updates = kv.split(",")
+        for kv in updates:
+            name, value = kv.split("=")
+            _update(name, value, ctx.obj.config)
+        return
+    _update(name, value, ctx.obj.config)
+
+
+cli.add_command(update, "u")
+
+
+def _update(key, value, dict):
+    if value in ["True", "False"]:
+        value = value == "True"
+    elif value in ["None"]:
+        value = None
+    elif value.isdigit():
+        value = int(value)
+    elif value.replace(".", "").isdigit():
+        value = float(value)
+    dict.update({key: value})

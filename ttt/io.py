@@ -4,6 +4,7 @@ import click
 
 
 class IO:
+    @staticmethod
     def get_prompt(prompt, prompt_file):
         """Get the prompt from stdin if it's not provided."""
         if prompt_file:
@@ -18,6 +19,7 @@ class IO:
                 raise click.Abort()
         return prompt
 
+    @staticmethod
     def return_prompt(response, prompt, prompt_file):
         if prompt_file:
             with open(prompt_file, "a") as f:

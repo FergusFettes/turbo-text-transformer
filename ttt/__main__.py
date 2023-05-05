@@ -1,33 +1,47 @@
 #!/usr/bin/env python3
 
 import os
+from dataclasses import dataclass
 
-import click
-from dotenv import load_dotenv
 from langchain.llms import OpenAI
 
 from ttt.config import Config
+from ttt.config import cli as config_cli
+from ttt.config import click, shell
 from ttt.io import IO
 from ttt.store import Store
-
-load_dotenv()
-
-
-def simple_gen(tree):
-    encoding = Config.get_encoding(tree.params.get("model", "gpt-3.5-turbo"))
-    tree.params["max_tokens"] -= len(encoding.encode(tree.prompt))
-    if tree.params["model"] == "code-davinci-002":
-        tree.params["openai_api_base"] = os.environ.get("CD2_URL")
-        tree.params["openai_api_key"] = os.environ.get("CD2_KEY")
-    llm = OpenAI(**tree.params)
-    responses = llm.generate([tree.prompt])
-    return responses.generations[0][0].text
+from ttt.tree import cli as tree_cli
 
 
-@click.command()
-@click.option("--reinit", "-R", help="Recreate the config files", is_flag=True, default=False)
-def config(reinit):
-    Config.check_config(reinit)
+@dataclass
+class App:
+    echo_prompt: bool = False
+    append: bool = False
+
+    def __post_init__(self):
+        self.config = Config.check_config()
+        self.store = Store(config=self.config)
+        self.io = IO
+        self.prompter = self.store.get_prompter()
+        self.tree = self.store.load_file()
+
+    @staticmethod
+    def simple_gen(tree):
+        if tree.params["model"] == "test":
+            return tree.prompt
+        encoding = Config.get_encoding(tree.params.get("model", "gpt-3.5-turbo"))
+        tree.params["max_tokens"] -= len(encoding.encode(tree.prompt))
+        if tree.params["model"] == "code-davinci-002":
+            tree.params["openai_api_base"] = os.environ.get("CD2_URL")
+            tree.params["openai_api_key"] = os.environ.get("CD2_KEY")
+        llm = OpenAI(**tree.params)
+        responses = llm.generate([tree.prompt])
+        return responses.generations[0][0].text
+
+    def print(self, response):
+        self.io.return_prompt(
+            response, self.prompt if self.echo_prompt else None, self.prompt_file if self.append else None
+        )
 
 
 @click.command()
@@ -43,7 +57,9 @@ def config(reinit):
 @click.option(
     "--temperature", "-T", help="Temperature, [0, 2]-- 0 is deterministic, >0.9 is creative.", default=None, type=int
 )
+@click.pass_context
 def chat(
+    ctx,
     prompt,
     echo_prompt,
     prompt_file,
@@ -52,25 +68,28 @@ def chat(
     template_args,
     **params,
 ):
-    prompt = IO.get_prompt(prompt, prompt_file)
-    config = Config.check_config()
-    store = Store(config=config)
-    prompter = store.get_prompter(template_file, template_args)
-    tree = store.get_tree(prompt, prompter, params)
+    ctx.obj.echo_prompt = echo_prompt
+    ctx.obj.append = append
 
-    response = tree.prompt if params["model"] == "test" else simple_gen(tree)
-    IO.return_prompt(response, prompt if echo_prompt else None, prompt_file if append else None)
+    prompt = ctx.obj.io.get_prompt(prompt, prompt_file)
+    prompter = ctx.obj.store.get_prompter(template_file, template_args)
+    tree = ctx.obj.store.get_tree(prompt, prompter, params)
+
+    response = ctx.obj.simple_gen(tree)
+    ctx.obj.print(response)
     tree.output(response)
 
 
-@click.group()
-def main():
-    pass
+@shell(prompt=">> ", intro="Starting app...")
+@click.pass_context
+def main(ctx):
+    ctx.obj = App()
 
 
 main.add_command(chat)
 main.add_command(Store.file)
-main.add_command(config)
+main.add_command(config_cli, "config")
+main.add_command(config_cli, "c")
 main.add_command(Store.template)
-main.add_command(Store.tree)
-main.add_command(Store.repl)
+main.add_command(tree_cli, "tree")
+main.add_command(tree_cli, "t")
