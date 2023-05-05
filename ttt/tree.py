@@ -5,6 +5,8 @@ from typing import Optional
 
 from gpt_index import Document, GPTMultiverseIndex
 from gpt_index.data_structs.data_structs import Node
+from rich.panel import Panel
+from rich.tree import Tree as RichTree
 
 from ttt.config import click, rich, shell
 
@@ -69,10 +71,6 @@ class Tree:
     def __len__(self):
         return len(self.index.index_struct.all_nodes)
 
-    def __repr__(self) -> str:
-        """Get string representation, in the manner of a git log."""
-        return self._get_repr(_str=self._legend())
-
     def get_full_repr(self, summaries=False) -> str:
         uber_root = Node(
             index=-1,
@@ -80,9 +78,9 @@ class Tree:
             child_indices=[i for i in self.index.index_struct.root_nodes.keys()],
             node_info={},
         )
-        _str = self._legend()
-        _str += self._root_info()
-        return self._get_repr(uber_root, _str, summaries=summaries)
+        self.legend()
+        self._root_info()
+        return self._get_repr(uber_root)
 
     def _root_info(self) -> str:
         _str = "\n# Root Node Index (branches:total_nodes)) #\n"
@@ -91,24 +89,17 @@ class Tree:
             children = self.index.index_struct.get_all_children(root)
             _str += f"{root.index}; ({len(leaves)}:{len(children)}):\t\t{root.text.splitlines()[0]}"
             _str += f"\t\t{'<-- CURRENT_ROOT' if self.index.index_struct.all_nodes[root.index].node_info.get('checked_out', False) else ''}\n"
-        return _str + "\n"
+        rich.print(Panel(_str, title="Root Nodes"))
 
-    def _legend(self) -> str:
-        return (
-            "\n"
-            "# Legend #######################################\n"
-            "# * are nodes that are not checked out         #\n"
-            "# X are nodes that are checked out             #\n"
-            "# E are nodes that have embeddings             #\n"
-            "# if you have run a similarity query,          #\n"
-            "#   the similarities will be displayed         #\n"
-            "#   instead of the E                           #\n"
-            "# ##############################################\n"
-            "\n"
-            "# Conversation Tree. You can checkout indexes.##\n"
+    def legend(self) -> str:
+        txt = (
+            "checked out nodes are in [bold red]bold red[/bold red]\n"
+            "other nodes are in [dim blue]dim blue[/dim blue]\n"
+            "navigate with [magenta]hjkl[/magenta]"
         )
+        rich.print(Panel.fit(txt, title="Legend", border_style="bold magenta"))
 
-    def _get_repr(self, node: Optional[Node] = None, _str: str = "", summaries: bool = False) -> str:
+    def _get_repr(self, node: Optional[Node] = None) -> str:
         if node is None:
             checked_out = [
                 i for i, n in self.index.index_struct.all_nodes.items() if n.node_info.get("checked_out", False)
@@ -117,58 +108,32 @@ class Tree:
                 node = self.index.index_struct.all_nodes[checked_out[0]]
             else:
                 node = self.index.index_struct.all_nodes[min(self.index.index_struct.all_nodes.keys())]
-        repr = self._get_repr_recursive(node, repr=_str, summaries=summaries)
-        return repr + "\n# ##############################################\n\n"
+        tree = RichTree(self._text(node), style="bold red", guide_style="bold magenta")
+        return self._get_repr_recursive(node, tree)
 
-    def _get_repr_recursive(
-        self, node: Optional[Node] = None, indent: int = 0, repr: str = "", summaries: bool = False
-    ) -> str:
-        info_str = "*" if not node.node_info.get("checked_out", False) else "X"
-        if node.embedding and node.node_info.get("similarity", None) is None:
-            info_str += "E"
-        if node.node_info.get("similarity", None) is not None:
-            info_str += f"{node.node_info['similarity']:.2f}"
+    def _get_repr_recursive(self, node: Optional[Node] = None, tree: Optional[RichTree] = None) -> str:
+        nodes = self.index.index_struct.get_children(node)
+        for child_node in nodes.values():
+            style = "bold red" if child_node.node_info.get("checked_out", False) else "dim blue"
+            subtree = tree.add(self._text(child_node), style=style)
+            self._get_repr_recursive(child_node, subtree)
+        return tree
 
+    def _text(self, node: Node) -> str:
         text_width = self.termwidth - 30
-        text = node.text.splitlines()[0]
+        text = node.text.replace("\n", " ")
+        text = f"{node.index}: {text}"
         if len(text) > text_width:
             text = text[:text_width] + " ..."
-
-        summary = ""
-        if summaries and node.node_info.get("summary", None) is not None:
-            summary = "\t\t"
-            summary += node.node_info["summary"].replace("\n", "; ")
-        info_str += f"\t\t{node.index}: {text}{summary}\n"
-
-        many_nodes = len(self.index.index_struct.all_nodes) > 50
-        space = " " if many_nodes else "  "
-
-        prefix = indent * f"|{space}"
-        repr += f"{prefix}{info_str}"
-
-        nodes = self.index.index_struct.get_children(node)
-        if not nodes:
-            return repr
-
-        if len(nodes) > 1:
-            repr += f"{prefix}|\\ \n"
-            if not many_nodes:
-                repr += f'{indent * "|  "}| \\ \n'
-
-        for child_node in nodes.values():
-            if self.index.index_struct.is_last_child(child_node):
-                repr = self._get_repr_recursive(child_node, indent, repr, summaries)
-            else:
-                repr = self._get_repr_recursive(child_node, indent + 1, repr, summaries)
-
-        return repr
+        return text
 
 
 @shell(prompt="tree> ")
 @click.pass_context
 def cli(ctx):
     """Manage app config."""
-    rich.print(ctx.obj.tree)
+    ctx.obj.tree.legend()
+    rich.print(ctx.obj.tree._get_repr())
 
 
 @cli.command()
@@ -177,28 +142,8 @@ def cli(ctx):
 def h(ctx, count):
     "Move to left sibling"
     for _ in range(count):
-        ctx.obj.tree.index.step("h")
-    rich.print(ctx.obj.tree)
-
-
-@cli.command()
-@click.argument("count", default=1)
-@click.pass_context
-def j(ctx, count):
-    "Move to parent"
-    for _ in range(count):
-        ctx.obj.tree.index.step("j")
-    rich.print(ctx.obj.tree)
-
-
-@cli.command()
-@click.argument("count", default=1)
-@click.pass_context
-def k(ctx, count):
-    "Move to child"
-    for _ in range(count):
         ctx.obj.tree.index.step("k")
-    rich.print(ctx.obj.tree)
+    rich.print(ctx.obj.tree._get_repr())
 
 
 @cli.command()
@@ -207,8 +152,28 @@ def k(ctx, count):
 def l(ctx, count):
     "Move to right sibling"
     for _ in range(count):
+        ctx.obj.tree.index.step("j")
+    rich.print(ctx.obj.tree._get_repr())
+
+
+@cli.command()
+@click.argument("count", default=1)
+@click.pass_context
+def j(ctx, count):
+    "Move to parent"
+    for _ in range(count):
         ctx.obj.tree.index.step("l")
-    rich.print(ctx.obj.tree)
+    rich.print(ctx.obj.tree._get_repr())
+
+
+@cli.command()
+@click.argument("count", default=1)
+@click.pass_context
+def k(ctx, count):
+    "Move to child"
+    for _ in range(count):
+        ctx.obj.tree.index.step("h")
+    rich.print(ctx.obj.tree._get_repr())
 
 
 @cli.command()
@@ -225,7 +190,8 @@ def display(ctx, type, index):
         \tnode/n: display the specific node(s) (pass the index of the node(s))
     """
     if type in ["t", "tree"]:
-        rich.print(ctx.obj.tree)
+        ctx.obj.tree.legend()
+        rich.print(ctx.obj.tree._get_repr())
 
     if type in ["a", "all"]:
         rich.print(ctx.obj.tree.get_full_repr())
@@ -239,8 +205,8 @@ def display(ctx, type, index):
         rich.print(ctx.obj.tree.index.path)
         return
 
-    if type in ["s", "summary"]:
-        rich.print(ctx.obj.tree.index.last_summary)
+    if type in ["pr", "prompt"]:
+        rich.print(ctx.obj.tree.index.prompt)
         return
 
     if type in ["n", "node"]:
@@ -291,6 +257,7 @@ def append(ctx, msg):
 
 
 cli.add_command(append, "ap")
+cli.add_command(append, "app")
 
 
 def _append(ctx, msg):
@@ -323,7 +290,7 @@ def checkout(ctx, tag):
     if tag.isdigit():
         tag = int(tag)
     ctx.obj.tree.index.checkout(tag)
-    rich.print(ctx.obj.tree)
+    rich.print(ctx.obj.tree._get_repr())
 
 
 cli.add_command(checkout, "c")
@@ -341,6 +308,8 @@ def edit(ctx, index):
 
     input = ctx.obj.tree.index.index_struct.all_nodes[index].text
     output = click.edit(input)
+    if output is None:
+        return
     ctx.obj.tree.index.index_struct.all_nodes[index].text = output
     rich.print(output)
 
