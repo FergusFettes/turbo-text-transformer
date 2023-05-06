@@ -169,22 +169,6 @@ class Config:
         else:
             click.echo(f"File mode is off.", err=True)
 
-    @staticmethod
-    def check_template(toggle, default, config):
-        if toggle:
-            config["template"] = not config["template"]
-
-        if default:
-            config["template_file"] = default
-
-        if toggle or config["template_file"]:
-            Config.save_config(config)
-
-        if config["template"]:
-            click.echo(f"Template mode is on. Using {config['template_file']} as the template file.", err=True)
-        else:
-            click.echo(f"Template mode is off.", err=True)
-
 
 Config.load_config()
 
