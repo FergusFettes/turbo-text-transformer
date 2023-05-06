@@ -1,5 +1,7 @@
+import sys
 from dataclasses import dataclass
 
+import openai
 from langchain.llms import OpenAI
 
 from ttt.config import Config, click, rich, shell
@@ -31,14 +33,88 @@ class App:
         if tree.params["model"] == "code-davinci-002":
             tree.params["openai_api_base"] = os.environ.get("CD2_URL")
             tree.params["openai_api_key"] = os.environ.get("CD2_KEY")
-        llm = OpenAI(**tree.params)
-        responses = llm.generate([prompt])
-        return responses.generations[0][0].text
+        # llm = OpenAI(**tree.params)
+        # responses = llm.generate([prompt])
+        # return responses.generations[0][0].text
+        return OAIGen.gen(prompt, tree.params)
 
     def output(self, response):
         self.io.return_prompt(
             response, self.prompt if self.echo_prompt else None, self.prompt_file if self.append else None
         )
+
+
+class OAIGen:
+    @staticmethod
+    def gen(prompt, params):
+        if params["n"] is not None and params["n"] > 1 and params["stream"]:
+            print("Can't stream completions with n>1 with the current CLI")
+            params["stream"] = False
+
+        if params["model"].startswith("gpt-3.5") or params["model"].startswith("gpt-4"):
+            return OAIGen._chat(prompt, params)
+        return OAIGen._gen(prompt, params)
+
+    @staticmethod
+    def _gen(prompt, params):
+        params["prompt"] = prompt
+
+        resp = openai.Completion.create(**params)
+        if not params["stream"]:
+            resp = [resp]
+
+        for part in resp:
+            choices = part["choices"]
+            for c_idx, c in enumerate(sorted(choices, key=lambda s: s["index"])):
+                if len(choices) > 1:
+                    sys.stdout.write("===== Completion {} =====\n".format(c_idx))
+                sys.stdout.write(c["text"])
+                if len(choices) > 1:
+                    sys.stdout.write("\n")
+                sys.stdout.flush()
+
+        return resp
+
+    @staticmethod
+    def _chat(prompt, params):
+        params["messages"] = [{"role": "user", "content": prompt}]
+        if "prompt" in params:
+            del params["prompt"]
+        if "logprobs" in params:
+            del params["logprobs"]
+
+        resp = openai.ChatCompletion.create(**params)
+
+        if not params["stream"]:
+            resp = [resp]
+
+        text = ""
+        for part in resp:
+            choices = part["choices"]
+            for c_idx, chunk in enumerate(sorted(choices, key=lambda s: s["index"])):
+                if len(choices) > 1:
+                    sys.stdout.write("===== Chat Completion {} =====\n".format(c_idx))
+                delta = chunk["delta"]
+                if "content" not in delta:
+                    continue
+                content = chunk["delta"]["content"]
+                if not content:
+                    break
+                text += content
+                sys.stdout.write(content)
+                if len(choices) > 1:
+                    sys.stdout.write("\n")
+                sys.stdout.flush()
+
+        return text
+
+        # for c in resp["choices"]:
+        #     c["text"] = c["message"]["content"]
+        #     del c["message"]
+        # resp["params"]["prompt"] = resp["params"]["messages"][0]["content"]
+        # del resp["params"]["messages"]
+        #
+        # return resp
 
 
 @shell(prompt="params> ")
