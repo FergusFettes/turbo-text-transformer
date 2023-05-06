@@ -29,8 +29,6 @@ class DummyTree:
 @dataclass
 class Tree:
     file: Optional[str] = None
-    in_str: str = "In: "
-    out_str: str = "Out: "
     index: Optional[GPTMultiverseIndex] = None
     params: Optional[dict] = None
     name: Optional[str] = None
@@ -53,14 +51,12 @@ class Tree:
         return prompt
 
     def input(self, prompt):
-        self.extend(prompt, preface=self.in_str)
+        self.extend(prompt)
 
     def output(self, prompt):
-        self.extend(prompt, preface=self.out_str, save=True)
+        self.extend(prompt, save=True)
 
-    def extend(self, response, preface=None, save=False):
-        if not response.startswith(preface):
-            response = f"{preface}{response}"
+    def extend(self, response, save=False):
         self.index.extend(Document(response))
         if save:
             self.save()
@@ -239,8 +235,12 @@ def send(ctx, msg):
     if msg:
         _append(ctx, msg)
 
-    response = ctx.obj.simple_gen(ctx.obj.tree)
+    prompt = ctx.obj.tree.prompt
+    prompt = ctx.obj.templater.prompt(prompt)
+
+    response = ctx.obj.simple_gen(prompt, ctx.obj.tree)
     rich.print(response)
+    response = ctx.obj.templater.out(response)
     ctx.obj.tree.output(response)
 
 
@@ -251,7 +251,7 @@ cli.add_command(send, "s")
 @click.pass_context
 def new(ctx):
     """n[ew] starts a new chain (a new root)"""
-    ctx.obj.tree.clear_checkout()
+    ctx.obj.tree.index.clear_checkout()
     ctx.obj.tree.save()
 
 
@@ -273,10 +273,7 @@ cli.add_command(append, "app")
 
 
 def _append(ctx, msg):
-    prompter = ctx.obj.store.get_prompter()
-    if len(ctx.obj.tree) == 0 and prompter is not None:
-        msg = prompter.prompt(msg)
-
+    msg = ctx.obj.templater.in_(msg)
     ctx.obj.tree.input(msg)
     ctx.obj.tree.save()
 

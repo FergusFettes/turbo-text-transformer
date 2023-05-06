@@ -1,8 +1,11 @@
 from dataclasses import dataclass
 
+from langchain.llms import OpenAI
+
 from ttt.config import Config, click, rich, shell
 from ttt.io import IO
 from ttt.store import Store
+from ttt.templater import Templater
 
 
 @dataclass
@@ -13,27 +16,26 @@ class App:
     def __post_init__(self):
         self.config = Config.check_config()
         self.store = Store(config=self.config)
+        self.templater = Templater(config=self.config)
         self.io = IO
-        self.prompter = self.store.get_prompter()
         self.tree = self.store.load_file()
         self.params = Config.load_openai_config()["engine_params"]
         self.tree.params = self.params
-        self.cli = cli
 
     @staticmethod
-    def simple_gen(tree):
+    def simple_gen(prompt, tree):
         if tree.params["model"] == "test":
-            return tree.prompt
+            return prompt
         encoding = Config.get_encoding(tree.params.get("model", "gpt-3.5-turbo"))
         tree.params["max_tokens"] -= len(encoding.encode(tree.prompt))
         if tree.params["model"] == "code-davinci-002":
             tree.params["openai_api_base"] = os.environ.get("CD2_URL")
             tree.params["openai_api_key"] = os.environ.get("CD2_KEY")
         llm = OpenAI(**tree.params)
-        responses = llm.generate([tree.prompt])
+        responses = llm.generate([prompt])
         return responses.generations[0][0].text
 
-    def print(self, response):
+    def output(self, response):
         self.io.return_prompt(
             response, self.prompt if self.echo_prompt else None, self.prompt_file if self.append else None
         )
