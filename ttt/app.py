@@ -1,11 +1,12 @@
 import os
 import sys
 from collections import defaultdict
-from copy import deepcopy
 from dataclasses import dataclass
 
 import openai
 from langchain.llms import OpenAI
+from rich.live import Live
+from rich.table import Table
 
 from ttt.config import Config, click, rich, shell
 from ttt.io import IO
@@ -28,15 +29,13 @@ class App:
         self.tree.params = self.params
 
     @staticmethod
-    def simple_gen(prompt, tree):
-        params = deepcopy(tree.params)
-        params["prompt"] = prompt
+    def simple_gen(params):
         if params["model"] == "test":
             return prompt
-        if tree.params["model"] == "code-davinci-002":
+        if params["model"] == "code-davinci-002":
             params["openai_api_base"] = os.environ.get("CD2_URL")
             params["openai_api_key"] = os.environ.get("CD2_KEY")
-            llm = OpenAI(**tree.params)
+            llm = OpenAI(**params)
             responses = llm.generate([params["prompt"]])
             return [generation.text for generation in responses[0]]
         generations = OAIGen.gen(params)
@@ -76,15 +75,16 @@ class OAIGen:
         if not params["stream"]:
             resp = [resp]
 
-        completions = defaultdict(str)
-        for part in resp:
-            choices = part["choices"]
-            for chunk in sorted(choices, key=lambda s: s["index"]):
-                c_idx = chunk["index"]
-                if not chunk["text"]:
-                    continue
-                completions[c_idx] += chunk["text"]
-                OAIGen.printlines(completions)
+        with Live() as live:
+            completions = defaultdict(str)
+            for part in resp:
+                choices = part["choices"]
+                for chunk in sorted(choices, key=lambda s: s["index"]):
+                    c_idx = chunk["index"]
+                    if not chunk["text"]:
+                        continue
+                    completions[c_idx] += chunk["text"]
+                    OAIGen.richprint(params, completions, live)
 
         return completions
 
@@ -92,6 +92,7 @@ class OAIGen:
     def _chat(params):
         params["messages"] = [{"role": "user", "content": params["prompt"]}]
         if "prompt" in params:
+            prompt = params["prompt"]
             del params["prompt"]
         if "logprobs" in params:
             del params["logprobs"]
@@ -101,23 +102,35 @@ class OAIGen:
         if not params["stream"]:
             resp = [resp]
 
-        completions = defaultdict(str)
-        for part in resp:
-            choices = part["choices"]
-            for chunk in sorted(choices, key=lambda s: s["index"]):
-                c_idx = chunk["index"]
-                if len(choices) > 1:
-                    sys.stdout.write("===== Chat Completion {} =====\n".format(c_idx))
-                delta = chunk["delta"]
-                if "content" not in delta:
-                    continue
-                content = chunk["delta"]["content"]
-                if not content:
-                    break
-                completions[c_idx] += content
-                OAIGen.printlines(completions)
+        with Live(screen=True) as live:
+            completions = defaultdict(str)
+            for part in resp:
+                choices = part["choices"]
+                for chunk in sorted(choices, key=lambda s: s["index"]):
+                    c_idx = chunk["index"]
+                    if len(choices) > 1:
+                        sys.stdout.write("===== Chat Completion {} =====\n".format(c_idx))
+                    delta = chunk["delta"]
+                    if "content" not in delta:
+                        continue
+                    content = chunk["delta"]["content"]
+                    if not content:
+                        break
+                    completions[c_idx] += content
+                    OAIGen.richprint(prompt, completions, live)
+            live.console.print("Choose a completion: ")
+            choice = click.prompt("Choose a completion", type=int)
 
         return completions
+
+    @staticmethod
+    def richprint(prompt, messages, live):
+        # I need to print the prompt to the console above the options on the output, but i need to somehow do it every time and at the same time print the table.
+        table = Table(box=rich.box.MINIMAL_DOUBLE_HEAD, show_lines=True)
+        for i, message in messages.items():
+            table.add_row(str(i), message)
+        live.update(table)
+        live.console.print(prompt)
 
     @staticmethod
     def printlines(messages):

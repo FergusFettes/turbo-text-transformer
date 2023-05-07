@@ -1,4 +1,5 @@
 import shutil
+from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -258,7 +259,9 @@ def send(ctx, msg):
     prompt = ctx.obj.tree.prompt
     prompt = ctx.obj.templater.prompt(prompt)
 
-    responses = ctx.obj.simple_gen(prompt, ctx.obj.tree)
+    params = deepcopy(ctx.obj.tree.params)
+    params["prompt"] = prompt
+    responses = ctx.obj.simple_gen(params)
     if len(responses) == 1:
         response = ctx.obj.templater.out(responses[0])
         ctx.obj.tree.extend(response)
