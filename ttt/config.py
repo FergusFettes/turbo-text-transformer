@@ -227,8 +227,8 @@ cli.add_command(update, "u")
 
 
 def _update(key, value, dict):
-    if value in ["True", "False"]:
-        value = value == "True"
+    if value in ["True", "False", "true", "false"]:
+        value = value in ["True", "true"]
     elif value in ["None"]:
         value = None
     elif value.isdigit():

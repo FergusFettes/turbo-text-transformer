@@ -46,7 +46,8 @@ class Tree:
 
     @property
     def prompt(self):
-        prompt = self.index.context + "\n" + self.index.__str__()
+        path = self.index.path
+        prompt = self.index.context + "\n" + "".join([node.text for node in path])
         prompt += f"\n"
         return prompt
 
@@ -58,6 +59,11 @@ class Tree:
 
     def extend(self, response, save=False):
         self.index.extend(Document(response))
+        if save:
+            self.save()
+
+    def insert(self, response, save=False):
+        self.index._insert(document=Document(response))
         if save:
             self.save()
 
@@ -91,7 +97,9 @@ class Tree:
         txt = (
             "checked out nodes are in [bold red]bold red[/bold red]\n"
             "other nodes are in [dim blue]dim blue[/dim blue]\n"
-            "navigate with [magenta]hjkl[/magenta]"
+            "navigate with [magenta]hjkl[/magenta]\n"
+            "show the current prompt with [magenta]p[/magenta]\n"
+            "\t(this will be the checked out path plus template)"
         )
         rich.print(Panel.fit(txt, title="Legend", border_style="bold magenta"))
 
@@ -138,7 +146,7 @@ def cli(ctx):
 def h(ctx, count):
     "Move to left sibling"
     for _ in range(count):
-        ctx.obj.tree.index.step("k")
+        ctx.obj.tree.index.step("up")
     rich.print(ctx.obj.tree._get_repr())
 
 
@@ -148,7 +156,7 @@ def h(ctx, count):
 def l(ctx, count):
     "Move to right sibling"
     for _ in range(count):
-        ctx.obj.tree.index.step("j")
+        ctx.obj.tree.index.step("down")
     rich.print(ctx.obj.tree._get_repr())
 
 
@@ -158,7 +166,7 @@ def l(ctx, count):
 def j(ctx, count):
     "Move to parent"
     for _ in range(count):
-        ctx.obj.tree.index.step("l")
+        ctx.obj.tree.index.step("right")
     rich.print(ctx.obj.tree._get_repr())
 
 
@@ -168,7 +176,7 @@ def j(ctx, count):
 def k(ctx, count):
     "Move to child"
     for _ in range(count):
-        ctx.obj.tree.index.step("h")
+        ctx.obj.tree.index.step("left")
     rich.print(ctx.obj.tree._get_repr())
 
 
@@ -202,7 +210,7 @@ def display(ctx, type, index):
         return
 
     if type in ["pr", "prompt"]:
-        rich.print(ctx.obj.tree.index)
+        rich.print(ctx.obj.tree.prompt)
         return
 
     if type in ["n", "node"]:
@@ -225,8 +233,20 @@ cli.add_command(display, "d")
 cli.add_command(display, "p")
 
 
+@cli.command(hidden=True)
+@click.pass_context
+def display_tree(ctx):
+    """Display the tree."""
+    ctx.obj.tree.legend()
+    rich.print(ctx.obj.tree._get_repr())
+
+
+cli.add_command(display_tree, "tree")
+cli.add_command(display_tree, "t")
+
+
 @cli.command()
-@click.argument("msg", default=None, required=False)
+@click.argument("msg", default=None, required=False, nargs=-1)
 @click.pass_context
 def send(ctx, msg):
     """s[end] MSG adds a new message to the chain and sends it all.\n
@@ -238,10 +258,15 @@ def send(ctx, msg):
     prompt = ctx.obj.tree.prompt
     prompt = ctx.obj.templater.prompt(prompt)
 
-    response = ctx.obj.simple_gen(prompt, ctx.obj.tree)
-    rich.print(response)
-    response = ctx.obj.templater.out(response)
-    ctx.obj.tree.output(response)
+    responses = ctx.obj.simple_gen(prompt, ctx.obj.tree)
+    if len(responses) == 1:
+        response = ctx.obj.templater.out(responses[0])
+        ctx.obj.tree.extend(response)
+    else:
+        for response in responses.values():
+            response = ctx.obj.templater.out(response)
+            ctx.obj.tree.insert(response)
+    ctx.obj.tree.save()
 
 
 cli.add_command(send, "s")
@@ -273,6 +298,8 @@ cli.add_command(append, "app")
 
 
 def _append(ctx, msg):
+    if isinstance(msg, tuple):
+        msg = " ".join(msg)
     msg = ctx.obj.templater.in_(msg)
     ctx.obj.tree.input(msg)
     ctx.obj.tree.save()
@@ -293,9 +320,6 @@ def tag(ctx, tag):
     if tag:
         ctx.obj.tree.index.tag(tag)
     rich.print(ctx.obj.tree.index.tags)
-
-
-cli.add_command(tag, "t")
 
 
 @cli.command()

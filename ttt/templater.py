@@ -50,15 +50,20 @@ class Templater:
             return Prompter(template_file, args=Config.arg2dict(template_args))
 
     def in_(self, message):
-        return self.template_config["in_prefix"] + message
+        in_prefix = self.template_config["in_prefix"] or ""
+        return in_prefix + message
 
     def prompt(self, prompt):
+        if self.template_config["out_prefix"]:
+            prompt += "\n"
+            prompt = prompt + self.template_config["out_prefix"]
         if self.template_config["template"]:
             prompt = Prompter(self.template_file).prompt(prompt)
         return prompt
 
     def out(self, message):
-        return self.template_config["out_prefix"] + message
+        out_prefix = self.template_config["out_prefix"] or ""
+        return out_prefix + message
 
     def list_templates(self):
         if not self.template_path.exists():
@@ -119,6 +124,8 @@ cli.add_command(update, "u")
 def _update(key, value, dict):
     if value in ["True", "False", "true", "false"]:
         value = value in ["True", "true"]
+    elif value is None:
+        value = None
     elif value in ["None"]:
         value = None
     elif value.isdigit():
@@ -146,6 +153,8 @@ def toggle(ctx):
 @click.argument("default")
 @click.pass_context
 def default(ctx, default):
+    if not filename.endswith(".j2"):
+        filename = filename + ".j2"
     ctx.obj.templater.template_config["template_file"] = default
     config = ctx.obj.templater.config
     config["templater"] = ctx.obj.templater.template_config
@@ -163,10 +172,12 @@ cli.add_command(list, "ls")
 
 
 @cli.command()
-@click.argument("filename", default=None)
+@click.argument("filename", default=None, required=False)
 @click.pass_context
 def edit(ctx, filename):
     """Edit a template file."""
+    if filename is None:
+        filename = Path(ctx.obj.templater.template_file).stem
     if not filename.endswith(".j2"):
         filename = filename + ".j2"
     filename = ctx.obj.templater.template_path / Path(filename)

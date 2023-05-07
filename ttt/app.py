@@ -1,4 +1,7 @@
+import os
 import sys
+from collections import defaultdict
+from copy import deepcopy
 from dataclasses import dataclass
 
 import openai
@@ -26,17 +29,33 @@ class App:
 
     @staticmethod
     def simple_gen(prompt, tree):
-        if tree.params["model"] == "test":
+        params = deepcopy(tree.params)
+        params["prompt"] = prompt
+        if params["model"] == "test":
             return prompt
-        encoding = Config.get_encoding(tree.params.get("model", "gpt-3.5-turbo"))
-        tree.params["max_tokens"] -= len(encoding.encode(tree.prompt))
         if tree.params["model"] == "code-davinci-002":
-            tree.params["openai_api_base"] = os.environ.get("CD2_URL")
-            tree.params["openai_api_key"] = os.environ.get("CD2_KEY")
-        # llm = OpenAI(**tree.params)
-        # responses = llm.generate([prompt])
-        # return responses.generations[0][0].text
-        return OAIGen.gen(prompt, tree.params)
+            params["openai_api_base"] = os.environ.get("CD2_URL")
+            params["openai_api_key"] = os.environ.get("CD2_KEY")
+            llm = OpenAI(**tree.params)
+            responses = llm.generate([params["prompt"]])
+            return [generation.text for generation in responses[0]]
+        generations = OAIGen.gen(params)
+        for i, gen in generations.items():
+            if gen.startswith("\n"):
+                generations[i] = gen[1:]
+        return generations
+
+    @staticmethod
+    def max_tokens(params):
+        model_max = Config.model_tokens.get(params["model"], 2048)
+
+        encoding = Config.get_encoding(params.get("model", "gpt-3.5-turbo"))
+        request_total = params["max_tokens"] + len(encoding.encode(prompt))
+
+        if request_total > model_max:
+            params["max_tokens"] = model_max - len(encoding.encode(prompt))
+        else:
+            params["max_tokens"] = request_total
 
     def output(self, response):
         self.io.return_prompt(
@@ -46,38 +65,32 @@ class App:
 
 class OAIGen:
     @staticmethod
-    def gen(prompt, params):
-        if params["n"] is not None and params["n"] > 1 and params["stream"]:
-            print("Can't stream completions with n>1 with the current CLI")
-            params["stream"] = False
-
+    def gen(params):
         if params["model"].startswith("gpt-3.5") or params["model"].startswith("gpt-4"):
-            return OAIGen._chat(prompt, params)
-        return OAIGen._gen(prompt, params)
+            return OAIGen._chat(params)
+        return OAIGen._gen(params)
 
     @staticmethod
-    def _gen(prompt, params):
-        params["prompt"] = prompt
-
+    def _gen(params):
         resp = openai.Completion.create(**params)
         if not params["stream"]:
             resp = [resp]
 
+        completions = defaultdict(str)
         for part in resp:
             choices = part["choices"]
-            for c_idx, c in enumerate(sorted(choices, key=lambda s: s["index"])):
-                if len(choices) > 1:
-                    sys.stdout.write("===== Completion {} =====\n".format(c_idx))
-                sys.stdout.write(c["text"])
-                if len(choices) > 1:
-                    sys.stdout.write("\n")
-                sys.stdout.flush()
+            for chunk in sorted(choices, key=lambda s: s["index"]):
+                c_idx = chunk["index"]
+                if not chunk["text"]:
+                    continue
+                completions[c_idx] += chunk["text"]
+                OAIGen.printlines(completions)
 
-        return resp
+        return completions
 
     @staticmethod
-    def _chat(prompt, params):
-        params["messages"] = [{"role": "user", "content": prompt}]
+    def _chat(params):
+        params["messages"] = [{"role": "user", "content": params["prompt"]}]
         if "prompt" in params:
             del params["prompt"]
         if "logprobs" in params:
@@ -88,10 +101,11 @@ class OAIGen:
         if not params["stream"]:
             resp = [resp]
 
-        text = ""
+        completions = defaultdict(str)
         for part in resp:
             choices = part["choices"]
-            for c_idx, chunk in enumerate(sorted(choices, key=lambda s: s["index"])):
+            for chunk in sorted(choices, key=lambda s: s["index"]):
+                c_idx = chunk["index"]
                 if len(choices) > 1:
                     sys.stdout.write("===== Chat Completion {} =====\n".format(c_idx))
                 delta = chunk["delta"]
@@ -100,21 +114,31 @@ class OAIGen:
                 content = chunk["delta"]["content"]
                 if not content:
                     break
-                text += content
-                sys.stdout.write(content)
-                if len(choices) > 1:
-                    sys.stdout.write("\n")
-                sys.stdout.flush()
+                completions[c_idx] += content
+                OAIGen.printlines(completions)
 
-        return text
+        return completions
 
-        # for c in resp["choices"]:
-        #     c["text"] = c["message"]["content"]
-        #     del c["message"]
-        # resp["params"]["prompt"] = resp["params"]["messages"][0]["content"]
-        # del resp["params"]["messages"]
-        #
-        # return resp
+    @staticmethod
+    def printlines(messages):
+        lines = 0
+        for message in messages.values():
+            lines += OAIGen.get_lines(message)  # get number of lines for message
+        OAIGen.clear_console(lines)  # clear those lines
+        for i, message in messages.items():
+            print(f"{i}: {message}")
+
+    @staticmethod
+    def clear_console(n):
+        print("\033[{}A".format(n), end="")  # move cursor up by n lines
+        print("\033[J", end="")  # clear from cursor to end of screen
+
+    @staticmethod
+    def get_lines(message):
+        newlines = message.count("\n")  # get number of newlines in message
+        term_width = os.get_terminal_size().columns  # get terminal width in characters
+        message_length = len(message)  # get message length in characters
+        return (message_length // term_width) + 1 + newlines  # get number of lines occupied by message
 
 
 @shell(prompt="params> ")
@@ -124,14 +148,15 @@ def cli(ctx):
     rich.print(ctx.obj.tree.params)
 
 
-@cli.command()
+@cli.command(hidden=True)
 @click.pass_context
-def print(ctx):
+def _print(ctx):
     "Print the current config."
     rich.print(ctx.obj.tree.params)
 
 
-cli.add_command(print, "p")
+cli.add_command(_print, "print")
+cli.add_command(_print, "p")
 
 
 @cli.command()
@@ -166,8 +191,8 @@ cli.add_command(update, "u")
 
 
 def _update(key, value, dict):
-    if value in ["True", "False"]:
-        value = value == "True"
+    if value in ["True", "False", "true", "false"]:
+        value = value in ["True", "true"]
     elif value in ["None"]:
         value = None
     elif value.isdigit():
