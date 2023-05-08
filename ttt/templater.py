@@ -2,8 +2,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+import jinja2
 from rich.panel import Panel
-from tttp.prompter import Prompter
+from rich.table import Table
 
 from ttt.config import Config, click, rich, shell
 
@@ -39,45 +40,60 @@ class Templater:
     def template_path(self, value):
         self.template_config["template_file"] = str(value)
 
-    def get_prompter(self, template_file=None, template_args=None):
-        if not self.template_config["template"]:
-            return None
-        if template_file:
-            template_file = self.template_path / Path(template_file)
-        else:
-            template_file = self.template_file
-        if template_file.exists():
-            return Prompter(template_file, args=Config.arg2dict(template_args))
-
     def in_(self, message):
         in_prefix = self.template_config["in_prefix"] or ""
-        return in_prefix + message
+        in_postfix = self.template_config["in_postfix"] or ""
+        return in_prefix + message + in_postfix
 
     def prompt(self, prompt):
-        if self.template_config["out_prefix"]:
-            prompt += "\n"
-            prompt = prompt + self.template_config["out_prefix"]
+        out_prefix = self.template_config["out_prefix"] or ""
+        prompt = prompt + out_prefix
         if self.template_config["template"]:
-            prompt = Prompter(self.template_file).prompt(prompt)
+            prompt = self._prompt(prompt)
         return prompt
+
+    def _prompt(self, prompt):
+        args = {"prompt": prompt}
+        template = Path(self.template_file).read_text()
+        return jinja2.Template(template).render(**args)
 
     def out(self, message):
         out_prefix = self.template_config["out_prefix"] or ""
-        return out_prefix + message
+        out_postfix = self.template_config["out_postfix"] or ""
+        return out_prefix + message + out_postfix
 
-    def list_templates(self):
+    def save(self):
+        config = self.config
+        config["templater"] = self.template_config
+        Config.save_config(self.config)
+
+    def list_templates(self, short):
         if not self.template_path.exists():
             return
 
         files = [x for x in self.template_path.glob("*.j2")]
         click.echo(f"Found {len(files)} templates.")
+        if short:
+            table = Table("Filename", "Text", box=rich.box.MINIMAL_DOUBLE_HEAD, show_lines=True)
+
         for file in files:
-            rich.print(Panel(file.read_text(), title=file.stem, border_style="blue"))
+            if short:
+                table.add_row(file.stem, file.read_text().replace("\n", "\\n"))
+            else:
+                rich.print(Panel(file.read_text(), title=file.stem, border_style="blue"))
+
+        if short:
+            rich.print(table)
 
 
 @shell(prompt="templater> ")
-def cli():
-    pass
+@click.pass_context
+def cli(ctx):
+    if Path(ctx.obj.templater.template_file).exists():
+        contents = Path(ctx.obj.templater.template_file).read_text()
+        rich.print(Panel(contents, title=ctx.obj.templater.template_file, border_style="blue"))
+    else:
+        rich.print(f"Template file {ctx.obj.templater.template_file} does not exist.")
 
 
 @cli.command()
@@ -150,21 +166,50 @@ def toggle(ctx):
 
 
 @cli.command()
-@click.argument("default")
+@click.argument("filename")
 @click.pass_context
-def default(ctx, default):
+def default(ctx, filename):
     if not filename.endswith(".j2"):
         filename = filename + ".j2"
-    ctx.obj.templater.template_config["template_file"] = default
-    config = ctx.obj.templater.config
-    config["templater"] = ctx.obj.templater.template_config
-    Config.save_config(ctx.obj.templater.config)
+    ctx.obj.templater.template_config["template_file"] = filename
+    ctx.obj.templater.save()
+
+
+cli.add_command(default, "d")
 
 
 @cli.command()
+@click.argument("prefix", default="", required=False)
+@click.argument("postfix", default="", required=False)
 @click.pass_context
-def list(ctx):
-    ctx.obj.templater.list_templates()
+def in_(ctx, prefix, postfix):
+    if not postfix:
+        postfix = "\n" if prefix else ""
+    ctx.obj.templater.template_config["in_prefix"] = prefix
+    ctx.obj.templater.template_config["in_postfix"] = postfix
+    ctx.obj.templater.save()
+
+
+cli.add_command(in_, "in")
+
+
+@cli.command()
+@click.argument("prefix", default="", required=False)
+@click.argument("postfix", default="", required=False)
+@click.pass_context
+def out(ctx, prefix, postfix):
+    if not postfix:
+        postfix = "\n" if prefix else ""
+    ctx.obj.templater.template_config["out_prefix"] = prefix
+    ctx.obj.templater.template_config["out_postfix"] = postfix
+    ctx.obj.templater.save()
+
+
+@cli.command()
+@click.option("--short", "-s", default=False, is_flag=True)
+@click.pass_context
+def list(ctx, short):
+    ctx.obj.templater.list_templates(short)
 
 
 cli.add_command(list, "l")
@@ -181,9 +226,9 @@ def edit(ctx, filename):
     if not filename.endswith(".j2"):
         filename = filename + ".j2"
     filename = ctx.obj.templater.template_path / Path(filename)
-    if filename.exists():
-        click.edit(filename=filename)
+    click.edit(filename=filename)
 
+    if filename.stem != Path(ctx.obj.templater.template_file).stem:
         default = click.confirm(f"Make default?", abort=True)
         if default:
             ctx.obj.config["template_file"] = filename.stem
@@ -211,3 +256,17 @@ def new(ctx, filename):
 
 
 cli.add_command(new, "n")
+
+
+@cli.command()
+@click.argument("filename", default=None)
+@click.pass_context
+def show(ctx, filename):
+    """Show a template."""
+    if filename is None:
+        filename = Path(ctx.obj.templater.template_file).stem
+    if not filename.endswith(".j2"):
+        filename = filename + ".j2"
+    filename = ctx.obj.templater.template_path / Path(filename)
+
+    rich.print(Panel.fit(filename.read_text(), title=filename.stem, border_style="blue"))

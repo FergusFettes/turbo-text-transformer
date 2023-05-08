@@ -1,7 +1,10 @@
 import os
+import re
+import shutil
 import sys
 from collections import defaultdict
 from dataclasses import dataclass
+from typing import Union
 
 import openai
 from langchain.llms import OpenAI
@@ -32,29 +35,30 @@ class App:
     def simple_gen(params):
         if params["model"] == "test":
             return prompt
+        App.max_tokens(params)
         if params["model"] == "code-davinci-002":
             params["openai_api_base"] = os.environ.get("CD2_URL")
             params["openai_api_key"] = os.environ.get("CD2_KEY")
             llm = OpenAI(**params)
             responses = llm.generate([params["prompt"]])
             return [generation.text for generation in responses[0]]
-        generations = OAIGen.gen(params)
+        generations, choice = OAIGen.gen(params)
+
         for i, gen in generations.items():
             if gen.startswith("\n"):
                 generations[i] = gen[1:]
-        return generations
+        choice = choice - 1 if choice != -1 else None
+        return generations, choice
 
     @staticmethod
     def max_tokens(params):
         model_max = Config.model_tokens.get(params["model"], 2048)
 
         encoding = Config.get_encoding(params.get("model", "gpt-3.5-turbo"))
-        request_total = params["max_tokens"] + len(encoding.encode(prompt))
+        request_total = params["max_tokens"] + len(encoding.encode(params["prompt"]))
 
         if request_total > model_max:
-            params["max_tokens"] = model_max - len(encoding.encode(prompt))
-        else:
-            params["max_tokens"] = request_total
+            params["max_tokens"] = model_max - len(encoding.encode(params["prompt"]))
 
     def output(self, response):
         self.io.return_prompt(
@@ -75,7 +79,8 @@ class OAIGen:
         if not params["stream"]:
             resp = [resp]
 
-        with Live() as live:
+        choice = -1
+        with Live(screen=True) as live:
             completions = defaultdict(str)
             for part in resp:
                 choices = part["choices"]
@@ -84,9 +89,11 @@ class OAIGen:
                     if not chunk["text"]:
                         continue
                     completions[c_idx] += chunk["text"]
-                    OAIGen.richprint(params, completions, live)
-
-        return completions
+                    OAIGen.richprint(params["prompt"], completions, live)
+            if len(completions):
+                OAIGen.richprint(params["prompt"], completions, live, final=True)
+                choice = click.prompt("Choose a completion", default=-1, type=int)
+        return completions, choice
 
     @staticmethod
     def _chat(params):
@@ -102,14 +109,13 @@ class OAIGen:
         if not params["stream"]:
             resp = [resp]
 
+        choice = -1
         with Live(screen=True) as live:
             completions = defaultdict(str)
             for part in resp:
                 choices = part["choices"]
                 for chunk in sorted(choices, key=lambda s: s["index"]):
                     c_idx = chunk["index"]
-                    if len(choices) > 1:
-                        sys.stdout.write("===== Chat Completion {} =====\n".format(c_idx))
                     delta = chunk["delta"]
                     if "content" not in delta:
                         continue
@@ -118,40 +124,38 @@ class OAIGen:
                         break
                     completions[c_idx] += content
                     OAIGen.richprint(prompt, completions, live)
-            live.console.print("Choose a completion: ")
-            choice = click.prompt("Choose a completion", type=int)
+            if len(completions):
+                OAIGen.richprint(prompt, completions, live, final=True)
+                choice = click.prompt("Choose a completion", default=-1, type=int)
 
-        return completions
+        for i, gen in completions.items():
+            # If the completion starts with a letter, prepend a space
+            if re.match(r"^[a-zA-Z]", gen):
+                completions[i] = " " + gen
+        return completions, choice
 
     @staticmethod
-    def richprint(prompt, messages, live):
-        # I need to print the prompt to the console above the options on the output, but i need to somehow do it every time and at the same time print the table.
-        table = Table(box=rich.box.MINIMAL_DOUBLE_HEAD, show_lines=True)
+    def richprint(prompt, messages, live, final=False):
+        messages = {k: v for k, v in sorted(messages.items(), key=lambda item: item[0])}
+        choice_msg = ""
+        if final:
+            choice_msg = "Choose a completion (optional). [Enter] to continue."
+        table = Table(
+            box=rich.box.MINIMAL_DOUBLE_HEAD,
+            width=shutil.get_terminal_size().columns,
+            show_lines=True,
+            show_header=False,
+            title=prompt[-1000:],
+            title_justify="left",
+            caption=choice_msg + ", ".join([str(i + 1) for i in messages.keys()]),
+            style="bold blue",
+            highlight=True,
+            title_style="bold blue",
+            caption_style="bold blue",
+        )
         for i, message in messages.items():
-            table.add_row(str(i), message)
+            table.add_row(str(i + 1), f"[bold]{message}[/bold]")
         live.update(table)
-        live.console.print(prompt)
-
-    @staticmethod
-    def printlines(messages):
-        lines = 0
-        for message in messages.values():
-            lines += OAIGen.get_lines(message)  # get number of lines for message
-        OAIGen.clear_console(lines)  # clear those lines
-        for i, message in messages.items():
-            print(f"{i}: {message}")
-
-    @staticmethod
-    def clear_console(n):
-        print("\033[{}A".format(n), end="")  # move cursor up by n lines
-        print("\033[J", end="")  # clear from cursor to end of screen
-
-    @staticmethod
-    def get_lines(message):
-        newlines = message.count("\n")  # get number of newlines in message
-        term_width = os.get_terminal_size().columns  # get terminal width in characters
-        message_length = len(message)  # get message length in characters
-        return (message_length // term_width) + 1 + newlines  # get number of lines occupied by message
 
 
 @shell(prompt="params> ")
@@ -198,6 +202,7 @@ def update(ctx, name, value, kv):
             _update(name, value, ctx.obj.tree.params)
         return
     _update(name, value, ctx.obj.tree.params)
+    rich.print(ctx.obj.tree.params)
 
 
 cli.add_command(update, "u")
