@@ -139,7 +139,7 @@ class OAIGen:
         messages = {k: v for k, v in sorted(messages.items(), key=lambda item: item[0])}
         choice_msg = ""
         if final:
-            choice_msg = "Choose a completion (optional). [Enter] to continue."
+            choice_msg = "Choose a completion (optional). [Enter] to continue. "
         table = Table(
             box=rich.box.MINIMAL_DOUBLE_HEAD,
             width=shutil.get_terminal_size().columns,
