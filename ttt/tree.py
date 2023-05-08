@@ -326,6 +326,15 @@ def send(ctx, msg):
 cli.add_command(send, "s")
 
 
+@click.pass_context
+def default(ctx, args):
+    """Default command"""
+    ctx.invoke(send, msg=args)
+
+
+cli.shell.default = default
+
+
 @cli.command()
 @click.pass_context
 def new(ctx):
