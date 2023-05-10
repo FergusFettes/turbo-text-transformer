@@ -50,7 +50,7 @@ def chat(
     ctx.obj.tree.output(response)
 
 
-@shell(prompt=">> ", intro="Starting app...")
+@shell(prompt=">> ", intro="Welcome to Command Line Loom! Type help or ? to list commands.\n")
 @click.pass_context
 def main(ctx):
     ctx.obj = App()

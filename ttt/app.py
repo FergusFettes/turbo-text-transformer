@@ -183,6 +183,7 @@ def save(ctx):
     config = Config.load_openai_config()
     config["engine_params"] = ctx.obj.tree.params
     Config.save_openai_config(config)
+    print("Saved config.")
 
 
 cli.add_command(save, "s")
@@ -218,3 +219,17 @@ def _update(key, value, dict):
     elif value.replace(".", "").isdigit():
         value = float(value)
     dict.update({key: value})
+
+
+@click.pass_context
+def default(ctx, args):
+    """Default command"""
+    args = args.split(" ")
+    if args[0] in ctx.obj.tree.params:
+        _update(args[0], args[1], ctx.obj.tree.params)
+    else:
+        rich.print(f"[red]Unknown command/param {args[0]}[/red]. If you need to add it to the dict, use 'update'.")
+    rich.print(ctx.obj.tree.params)
+
+
+cli.shell.default = default
