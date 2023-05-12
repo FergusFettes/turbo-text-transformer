@@ -1,10 +1,8 @@
 import os
 import re
 import shutil
-import sys
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Union
 
 import openai
 from langchain.llms import OpenAI
@@ -34,13 +32,15 @@ class App:
     @staticmethod
     def simple_gen(params):
         if params["model"] == "test":
-            return prompt
+            return params["prompt"]
         App.max_tokens(params)
         if params["model"] == "code-davinci-002":
+            prompt = params["prompt"]
+            del params["prompt"]
             params["openai_api_base"] = os.environ.get("CD2_URL")
             params["openai_api_key"] = os.environ.get("CD2_KEY")
             llm = OpenAI(**params)
-            responses = llm.generate([params["prompt"]])
+            responses = llm.generate([prompt])
             return [generation.text for generation in responses[0]]
         generations, choice = OAIGen.gen(params)
 
