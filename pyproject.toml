@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "turbo-text-transformer"
-version = "0.2.0"
+version = "0.2.1"
 description = ""
 authors = ["fergus <fergusfettes@gmail.com>"]
 homepage = "https://github.com/fergusfettes/turbo-text-transformer"
@@ -20,7 +20,7 @@ python-dotenv = "^1.0.0"
 hyperdb-python = "^0.1.2"
 click-shell = "^2.1"
 typer = "^0.9.0"
-click-repl = "^0.2.0"
+click-repl = "^0.2.1"
 rich = "^13.3.5"
 
 [tool.poetry.group.dev.dependencies]
@@ -33,7 +33,7 @@ ttt = "ttt.__main__:main"
 
 [project]
 name = "turbo-text-transformer"
-version = "0.2.0"
+version = "0.2.1"
 dynamic = ["dependencies"]
 
 [tool.setuptools.dynamic]
