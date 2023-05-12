@@ -141,7 +141,7 @@ class Config:
         click.echo("Config file not found. Creating one for you...", err=True, color="red")
         Config.create_config()
         openai_api_key = click.prompt("OpenAI API Key", type=str)
-        os.environ["OPENAI_API_KEY"] = openai_config["api_key"]
+        os.environ["OPENAI_API_KEY"] = openai_api_key
         if openai_api_key:
             Config.create_openai_config(openai_api_key)
 
