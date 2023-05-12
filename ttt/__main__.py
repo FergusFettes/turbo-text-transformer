@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
 
-import os
-from dataclasses import dataclass
-
-from langchain.llms import OpenAI
-
 from ttt.app import App
 from ttt.app import cli as app_cli
 from ttt.config import Config
@@ -56,17 +51,17 @@ def main(ctx):
     ctx.obj = App()
 
 
-main.add_command(chat)
+# main.add_command(chat)
 main.add_command(Store.file)
 main.add_command(config_cli, "config")
 main.add_command(config_cli, "c")
 main.add_command(tree_cli, "tree")
 main.add_command(tree_cli, "t")
 main.add_command(app_cli, "params")
-main.add_command(templater_cli, "templater")
+# main.add_command(templater_cli, "templater")
 main.add_command(templater_cli, "template")
 main.add_command(templater_cli, "tr")
 tree_cli.add_command(app_cli, "params")
-tree_cli.add_command(templater_cli, "templater")
+# tree_cli.add_command(templater_cli, "templater")
 tree_cli.add_command(templater_cli, "template")
 tree_cli.add_command(templater_cli, "tr")

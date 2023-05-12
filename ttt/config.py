@@ -42,7 +42,24 @@ class Config:
         "text-davinci-002": 4096 - 8,
         "code-davinci-002": 4096 - 8,
     }
-    TURBO_TEXT_TRANSFORMER_DEFAULT_PARAMS = {"format": "clean", "echo_prompt": False, "backup_path": "/tmp/ttt/"}
+    TURBO_TEXT_TRANSFORMER_DEFAULT_PARAMS = {
+        "format": "clean",
+        "file": True,
+        "chat_path": "~/.config/ttt/chats",
+        "chat_name": "default",
+        "echo_prompt": False,
+        "append": False,
+        "backup_path": "/tmp/ttt/",
+        "templater": {
+            "in_postfix": "\n",
+            "out_postfix": "\n",
+            "in_prefix": "Human: ",
+            "out_prefix": "GPT:",
+            "template": True,
+            "template_path": "~/.config/ttt/templates",
+            "template_file": "assist.j2",
+        },
+    }
     OPENAI_DEFAULT_PARAMS = {
         "frequency_penalty": 0,
         "logprobs": 1,
@@ -53,6 +70,7 @@ class Config:
         "stop": None,
         "temperature": 0.9,
         "top_p": 1,
+        "stream": True,
     }
     config_dir = Path().home() / ".config/ttt"
 
@@ -75,6 +93,7 @@ class Config:
     def create_config():
         Config.config_dir.mkdir(parents=True, exist_ok=True)
         Config().config_path.write_text(yaml.dump(Config.TURBO_TEXT_TRANSFORMER_DEFAULT_PARAMS))
+        Config.load_config()
 
         # Find the templates, and make sure they are in the right place
         tttp_dir = Path(tttp.__file__).parent
@@ -85,21 +104,25 @@ class Config:
             if not (templates / template.name).exists():
                 (templates / template.name).write_text(template.read_text())
 
+        Path(config.get("chat_path", "~/.config/ttt/chats")).expanduser().mkdir(parents=True, exist_ok=True)
+
     @staticmethod
     def create_openai_config(api_key):
         path = Config.config_dir / "openai.yaml"
 
-        config = {
+        oai_config = {
             "engine_params": Config.OPENAI_DEFAULT_PARAMS,
             "api_key": api_key,
             "backup_path": str(config.get("backup_path", "/tmp/ttt/")),
             "models": [],
         }
-        path.write_text(yaml.dump(config))
+        path.write_text(yaml.dump(oai_config))
 
     @staticmethod
     def load_openai_config():
         path = Config.config_dir / "openai.yaml"
+        if not path.exists():
+            return {}
         return yaml.load(path.read_text(), Loader=yaml.Loader)
 
     @staticmethod
@@ -110,9 +133,9 @@ class Config:
     @staticmethod
     def check_config(reinit=False):
         """Check that the config file exists."""
-        openai_config = Config.load_openai_config()
-        os.environ["OPENAI_API_KEY"] = openai_config["api_key"]
         if not reinit and Config().config_path.exists():
+            openai_config = Config.load_openai_config()
+            os.environ["OPENAI_API_KEY"] = openai_config["api_key"]
             return config
 
         click.echo("Config file not found. Creating one for you...", err=True, color="red")

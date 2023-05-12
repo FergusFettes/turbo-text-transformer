@@ -34,7 +34,7 @@ class Templater:
     @property
     def template_path(self):
         """The template_path property."""
-        return Path(self.template_config["template_path"])
+        return Path(self.template_config["template_path"]).expanduser()
 
     @template_path.setter
     def template_path(self, value):
