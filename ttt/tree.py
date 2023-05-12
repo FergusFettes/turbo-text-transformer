@@ -458,6 +458,14 @@ def cherry_pick(ctx, indexes):
 cli.add_command(cherry_pick, "cp")
 
 
+@click.pass_context
+def default(ctx, args):
+    """Default command"""
+    ctx.invoke(send, msg=args)
+
+
+cli.shell.default = default
+
 # @staticmethod
 # def context(_, command_params, tree):
 #     if command_params and command_params[0] == "help":
