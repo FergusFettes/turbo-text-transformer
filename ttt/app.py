@@ -3,16 +3,23 @@ import re
 import shutil
 from collections import defaultdict
 from dataclasses import dataclass
+from typing import Optional
 
 import openai
+import rich
+import typer
 from langchain.llms import OpenAI
+from rich import print
 from rich.live import Live
 from rich.table import Table
+from typer import Argument, Context
+from typing_extensions import Annotated
 
-from ttt.config import Config, click, rich, shell
+from ttt.config import Config
 from ttt.io import IO
 from ttt.store import Store
-from ttt.templater import Templater
+# from ttt.templater import Templater
+from ttt.typer_shell import make_typer_shell
 
 
 @dataclass
@@ -23,7 +30,7 @@ class App:
     def __post_init__(self):
         self.config = Config.check_config()
         self.store = Store(config=self.config)
-        self.templater = Templater(config=self.config)
+        # self.templater = Templater(config=self.config)
         self.io = IO
         self.tree = self.store.load_file()
         self.params = Config.load_openai_config()["engine_params"]
@@ -92,7 +99,7 @@ class OAIGen:
                     OAIGen.richprint(params["prompt"], completions, live)
             if len(completions):
                 OAIGen.richprint(params["prompt"], completions, live, final=True)
-                choice = click.prompt("Choose a completion", default=-1, type=int)
+                choice = typer.prompt("Choose a completion", default=-1, type=int)
         return completions, choice
 
     @staticmethod
@@ -126,7 +133,7 @@ class OAIGen:
                     OAIGen.richprint(prompt, completions, live)
             if len(completions):
                 OAIGen.richprint(prompt, completions, live, final=True)
-                choice = click.prompt("Choose a completion", default=-1, type=int)
+                choice = typer.prompt("Choose a completion", default=-1, type=int)
 
         for i, gen in completions.items():
             # If the completion starts with a letter, prepend a space
@@ -158,78 +165,55 @@ class OAIGen:
         live.update(table)
 
 
-@shell(prompt="params> ")
-@click.pass_context
-def cli(ctx):
-    """Manage model params."""
-    rich.print(ctx.obj.tree.params)
+def default(ctx: Context, args: str):
+    """Default command"""
+    print("default doesn't work :(")
+    # args = args.split(" ")
+    # if args[0] in ctx.obj.tree.params:
+    #     Config._update(args[0], args[1], ctx.obj.tree.params)
+    # else:
+    #     print(
+    #         f"[red]Unknown command/param {args[0]}[/red]. "
+    #         "If you need to add it to the dict, use 'update'."
+    #     )
+    # print(ctx.obj.tree.params)
 
 
-@cli.command(hidden=True)
-@click.pass_context
-def _print(ctx):
-    "Print the current config."
-    rich.print(ctx.obj.tree.params)
+cli = make_typer_shell(
+    prompt="📃: ", intro="Welcome to the Model Config! Type help or ? to list commands.", default=default
+)
 
 
-cli.add_command(_print, "print")
-cli.add_command(_print, "p")
+@cli.command(name="print")
+@cli.command(name="p", hidden=True)
+def _print(ctx: Context):
+    "(p) Print the current config."
+    print(ctx.obj.tree.params)
 
 
 @cli.command()
-@click.pass_context
-def save(ctx):
-    "Save the current config to the config file."
-    config = Config.load_openai_config()
-    config["engine_params"] = ctx.obj.tree.params
-    Config.save_openai_config(config)
+@cli.command(name="s", hidden=True)
+def save(ctx: Context):
+    "(s) Save the current config to the config file."
+    ctx.obj.config._dict["engine_params"] = ctx.obj.tree.params
+    Config.save_openai_config(ctx.obj.config._dict)
     print("Saved config.")
 
 
-cli.add_command(save, "s")
-
-
 @cli.command()
-@click.argument("name", required=False)
-@click.argument("value", required=False)
-@click.argument("kv", required=False)
-@click.pass_context
-def update(ctx, name, value, kv):
-    "Update a config value, or set of values. (kv in the form of 'name1=value1,name2=value2')"
+@cli.command(name="u", hidden=True)
+def update(
+    ctx: Context,
+    name: Annotated[Optional[str], Argument()] = None,
+    value: Annotated[Optional[str], Argument()] = None,
+    kv: Annotated[Optional[str], Argument()] = None,
+):
+    "(u) Update a config value, or set of values. (kv in the form of 'name1=value1,name2=value2')"
     if kv:
         updates = kv.split(",")
         for kv in updates:
             name, value = kv.split("=")
-            _update(name, value, ctx.obj.tree.params)
+            Config._update(name, value, ctx.obj.tree.params)
         return
-    _update(name, value, ctx.obj.tree.params)
-    rich.print(ctx.obj.tree.params)
-
-
-cli.add_command(update, "u")
-
-
-def _update(key, value, dict):
-    if value in ["True", "False", "true", "false"]:
-        value = value in ["True", "true"]
-    elif value in ["None"]:
-        value = None
-    elif value.isdigit():
-        value = int(value)
-    elif value.replace(".", "").isdigit():
-        value = float(value)
-    dict.update({key: value})
-
-
-@click.pass_context
-def default(ctx, args):
-    """Default command"""
-    args = args.split(" ")
-    if args[0] in ctx.obj.tree.params:
-        _update(args[0], args[1], ctx.obj.tree.params)
-    else:
-        rich.print(f"[red]Unknown command/param {args[0]}[/red]. If you need to add it to the dict, use 'update'.")
-    rich.print(ctx.obj.tree.params)
-
-
-cli.shell.default = default
+    Config._update(name, value, ctx.obj.tree.params)
+    print(ctx.obj.tree.params)

@@ -1,15 +1,21 @@
 import shutil
 from copy import deepcopy
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
+import click
 from gpt_index import Document, GPTMultiverseIndex
 from gpt_index.data_structs.data_structs import Node
+from rich import print
+from rich.console import Console
 from rich.panel import Panel
 from rich.tree import Tree as RichTree
+from typer import Argument, Context
+from typing_extensions import Annotated
 
-from ttt.config import click, rich, shell
+from .typer_shell import make_typer_shell
 
 
 @dataclass
@@ -102,8 +108,9 @@ class Tree:
             leaves = self.index.index_struct.get_leaves(root)
             children = self.index.index_struct.get_all_children(root)
             _str += f"{root.index}; ({len(leaves)}:{len(children)}):\t\t{root.text.splitlines()[0]}"
-            _str += f"\t\t{'<-- CURRENT_ROOT' if self.index.index_struct.all_nodes[root.index].node_info.get('checked_out', False) else ''}\n"
-        rich.print(Panel(_str, title="Root Nodes"))
+            if self.index.index_struct.all_nodes[root.index].node_info.get("checked_out", False):
+                _str += "\t\t<-- CURRENT_ROOT"
+        print(Panel(_str, title="Root Nodes"))
 
     def legend(self) -> str:
         txt = (
@@ -114,7 +121,7 @@ class Tree:
             "show the tree with [magenta]t[/magenta]\n"
             "(this will be the checked out path plus template)"
         )
-        rich.print(Panel.fit(txt, title="Legend", border_style="bold magenta"))
+        print(Panel.fit(txt, title="Legend", border_style="bold magenta"))
 
     def _get_repr(self, node: Optional[Node] = None) -> str:
         if node is None:
@@ -147,65 +154,10 @@ class Tree:
         return text
 
 
-@shell(prompt="tree> ")
-@click.pass_context
-def cli(ctx):
-    """Manage app config."""
-    path_with_current(ctx)
-
-
-@cli.command()
-@click.argument("count", default=1)
-@click.pass_context
-def h(ctx, count):
-    "Move to left sibling"
-    for _ in range(count):
-        ctx.obj.tree.index.step("up")
-    path_with_current(ctx)
-
-
-@cli.command()
-@click.argument("count", default=1)
-@click.pass_context
-def l(ctx, count):
-    "Move to right sibling"
-    for _ in range(count):
-        ctx.obj.tree.index.step("down")
-    path_with_current(ctx)
-
-
-@cli.command()
-@click.argument("count", default=1)
-@click.pass_context
-def j(ctx, count):
-    "Move to parent"
-    for _ in range(count):
-        ctx.obj.tree.index.step("right")
-    path_with_current(ctx)
-
-
-@cli.command()
-@click.argument("count", default=1)
-@click.pass_context
-def k(ctx, count):
-    "Move to child"
-    for _ in range(count):
-        ctx.obj.tree.index.step("left")
-    path_with_current(ctx)
-
-
-@cli.command()
-@click.argument("value", default=1)
-@click.pass_context
-def join(ctx, value):
-    "Update the string used to join nodes."
-    ctx.obj.tree.join = value
-
-
 def path_with_current(ctx):
-    rich.console.Console().clear()
+    Console().clear()
     ctx.obj.tree.legend()
-    rich.print(ctx.obj.tree._get_repr())
+    print(ctx.obj.tree._get_repr())
     if not ctx.obj.tree.index.path:
         return
     path = ctx.obj.tree.index.path
@@ -214,15 +166,73 @@ def path_with_current(ctx):
     path_str += "[bold red]"
     path_str += path[-1].text
     path_str += "[/bold red]"
-    rich.print(Panel.fit(path_str, title="Prompt", border_style="bold magenta"))
+    print(Panel.fit(path_str, title="Prompt", border_style="bold magenta"))
+
+
+def default(msg):
+    """Default command"""
+    print("Default doesn't work yet :/.")
+
+
+cli = make_typer_shell(
+    prompt="🌲: ",
+    launch=path_with_current,
+    default=default,
+)
+
+
+@cli.command(hidden=True)
+def h(ctx: Context, count: int = 1):
+    "Move to left sibling"
+    for _ in range(count):
+        ctx.obj.tree.index.step("up")
+    path_with_current(ctx)
+
+
+@cli.command(hidden=True)
+def j(ctx: Context, count: int = 1):
+    "Move to parent"
+    for _ in range(count):
+        ctx.obj.tree.index.step("right")
+    path_with_current(ctx)
+
+
+@cli.command(hidden=True)
+def k(ctx: Context, count: int = 1):
+    "Move to child"
+    for _ in range(count):
+        ctx.obj.tree.index.step("left")
+    path_with_current(ctx)
+
+
+@cli.command(hidden=True)
+@cli.command(name="l", hidden=True)
+def left(ctx: Context, count: int = 1):
+    "Move to left sibling"
+    for _ in range(count):
+        ctx.obj.tree.index.step("down")
+    path_with_current(ctx)
 
 
 @cli.command()
-@click.argument("type", default="prompt")
-@click.argument("index", default=None, required=False)
-@click.pass_context
-def display(ctx, type, index):
-    """Display the tree.\n
+def navigate(ctx: Context, direction: str, count: int = 1):
+    'Navigate with "hjkl" or "wasd".'
+    "You don't need to pass them to this function."
+    "View may be rotated 90 degrees."
+    for _ in range(count):
+        ctx.obj.tree.index.step(direction)
+    path_with_current(ctx)
+
+
+@cli.command()
+@cli.command(name="d", hidden=True)
+@cli.command(name="p", hidden=True)
+def display(
+    ctx: Context,
+    type: Annotated[Optional[str], Argument()] = "p",
+    index: Annotated[Optional[str], Argument()] = None,
+):
+    """(d, p, t) Various display options (check help).\n
     Types:\n
         \ttree/t: display the tree structure\n
         \tall/a: display the full tree including other roots\n
@@ -232,36 +242,36 @@ def display(ctx, type, index):
         \tsummary/s: display the current context and latest summary\n
         \tnode/n: display the specific node(s) (pass the index of the node(s))
     """
-    rich.console.Console().clear()
+    Console().clear()
     if type in ["t", "tree"]:
         ctx.obj.tree.legend()
-        rich.print(ctx.obj.tree._get_repr())
+        print(ctx.obj.tree._get_repr())
 
     if type in ["a", "all"]:
-        rich.print(ctx.obj.tree.get_full_repr())
+        print(ctx.obj.tree.get_full_repr())
         return
 
     if type in ["c", "context"]:
-        rich.print(ctx.obj.tree.index.context)
+        print(ctx.obj.tree.index.context)
         return
 
     if type in ["p", "path"]:
-        rich.print(ctx.obj.tree.index.path)
+        print(ctx.obj.tree.index.path)
         return
 
     if type in ["pr", "prompt"]:
-        rich.print(Panel.fit(ctx.obj.tree.prompt, title="Prompt", border_style="bold magenta"))
+        print(Panel.fit(ctx.obj.tree.prompt, title="Prompt", border_style="bold magenta"))
         return
 
     if type in ["tr", "templated"]:
         prompt = ctx.obj.tree.prompt
         prompt = ctx.obj.templater.prompt(prompt)
-        rich.print(prompt)
+        print(prompt)
         return
 
     if type in ["n", "node"]:
         if index is None:
-            rich.print("Please provide an index")
+            print("Please provide an index")
             return
 
         if "," in index:
@@ -271,34 +281,33 @@ def display(ctx, type, index):
 
         for index in indexes:
             if index.isdigit():
-                rich.print(ctx.obj.tree.index.index_struct.all_nodes[int(index)].text)
+                print(ctx.obj.tree.index.index_struct.all_nodes[int(index)].text)
                 continue
 
 
-cli.add_command(display, "d")
-cli.add_command(display, "p")
-
-
-@cli.command(hidden=True)
-@click.pass_context
-def display_tree(ctx):
-    """Display the tree."""
+@cli.command(name="tree")
+@cli.command(name="t", hidden=True)
+def display_tree(ctx: Context):
+    """(t) Display the tree."""
     path_with_current(ctx)
 
 
-cli.add_command(display_tree, "tree")
-cli.add_command(display_tree, "t")
+def _append(ctx, msg):
+    if isinstance(msg, tuple) or isinstance(msg, list):
+        msg = " ".join(msg)
+    msg = ctx.obj.templater.in_(msg)
+    ctx.obj.tree.input(msg)
+    ctx.obj.tree.save()
 
 
 @cli.command()
-@click.argument("msg", default=None, required=False, nargs=-1)
-@click.pass_context
-def send(ctx, msg):
-    """s[end] MSG adds a new message to the chain and sends it all.\n
-    s[end] on its own sends the existing chain as is"""
-
-    if msg:
-        _append(ctx, msg)
+@cli.command(name="s", hidden=True)
+def send(
+    ctx: Context,
+    msg: Annotated[Optional[List[str]], Argument()],
+):
+    """(s) Adds a new message to the chain and sends it all."""
+    _append(ctx, msg)
 
     prompt = ctx.obj.tree.prompt
     prompt = ctx.obj.templater.prompt(prompt)
@@ -323,94 +332,87 @@ def send(ctx, msg):
     path_with_current(ctx)
 
 
-cli.add_command(send, "s")
+@cli.command()
+@cli.command(name="pu", hidden=True)
+def push(ctx: Context):
+    """(pu) sends the tree with no new message."""
 
+    prompt = ctx.obj.tree.prompt
+    prompt = ctx.obj.templater.prompt(prompt)
 
-@click.pass_context
-def default(ctx, args):
-    """Default command"""
-    ctx.invoke(send, msg=args)
+    params = deepcopy(ctx.obj.tree.params)
+    params["prompt"] = prompt
+    responses, choice = ctx.obj.simple_gen(params)
+    if len(responses) == 1:
+        response = ctx.obj.templater.out(responses[0])
+        ctx.obj.tree.extend(response)
+    else:
+        for response in responses.values():
+            response = ctx.obj.templater.out(response)
+            ctx.obj.tree.insert(response)
 
+    if choice is not None:
+        index = len(responses) - choice
+        node_indexes = list(ctx.obj.tree.index.index_struct.all_nodes.keys())
+        ctx.obj.tree.index.checkout(node_indexes[-index])
+    ctx.obj.tree.save()
 
-cli.shell.default = default
+    path_with_current(ctx)
 
 
 @cli.command()
-@click.pass_context
-def new(ctx):
+@cli.command(name="n", hidden=True)
+def new(ctx: Context):
     """n[ew] starts a new chain (a new root)"""
     ctx.obj.tree.index.clear_checkout()
     ctx.obj.tree.save()
 
 
-cli.add_command(new, "n")
-
-
 @cli.command()
-@click.argument("msg", default=None, required=False, nargs=-1)
-@click.pass_context
-def append(ctx, msg):
-    """ap[pend] MSG adds a new node at the end of the chain. If MSG is empty, an editor will be opened."""
+@cli.command(name="ap", hidden=True)
+def append(
+    ctx: Context,
+    msg: Annotated[Optional[List[str]], Argument()],
+):
+    """(ap) adds a new node at the end of the chain. If MSG is empty, an editor will be opened."""
     if not msg:
         msg = click.edit()
     _append(ctx, msg)
 
 
-cli.add_command(append, "ap")
-cli.add_command(append, "app")
-
-
-def _append(ctx, msg):
-    if isinstance(msg, tuple):
-        msg = " ".join(msg)
-    msg = ctx.obj.templater.in_(msg)
-    ctx.obj.tree.input(msg)
-    ctx.obj.tree.save()
-
-
 @cli.command()
-@click.pass_context
-def save(ctx):
+def save(ctx: Context):
     """Save the current tree"""
     ctx.obj.tree.save()
 
 
 @cli.command()
-@click.argument("tag", default=None, required=False)
-@click.pass_context
-def tag(ctx, tag):
-    "tag X tags the current branch (checkout tags with checkout X)\n\t\ttag alone shows tag list"
+def tag(
+    ctx: Context,
+    tag: Annotated[Optional[str], Argument()],
+):
+    "tags the current branch (empty shows tag list)"
     if tag:
         ctx.obj.tree.index.tag(tag)
-    rich.print(ctx.obj.tree.index.tags)
+    print(ctx.obj.tree.index.tags)
 
 
 @cli.command()
-@click.argument("tag", default=None)
-@click.pass_context
-def checkout(ctx, tag):
-    "checkout X checks out a tag or index"
+@cli.command(name="c", hidden=True)
+def checkout(ctx: Context, tag: str):
+    "(c) checks out a tag or index"
     if tag.isdigit():
         tag = int(tag)
     ctx.obj.tree.index.checkout(tag)
     path_with_current(ctx)
 
 
-cli.add_command(checkout, "c")
-
-
 @cli.command()
-@click.argument("index", default=None, required=False)
-@click.pass_context
-def edit(ctx, index):
-    """Edit a node (if no node provided, edit the last one).\n
+@cli.command(name="e", hidden=True)
+def edit(ctx: Context, index: Annotated[Optional[str], Argument()] = None):
+    """(e) Edit a node (default is the current node).
     Or pass "prompt" to export the full tree to an editor.
     """
-    if index in ["prompt", "pr", "p"]:
-        input = str(ctx.obj.tree.prompt)
-        click.edit(input)
-        return
-
     if not index:
         index = ctx.obj.tree.index.path[-1].index
     index = int(index)
@@ -422,49 +424,37 @@ def edit(ctx, index):
     # Vim adds a newline at the end
     output = output.strip("\n")
     ctx.obj.tree.index.index_struct.all_nodes[index].text = output
-    rich.print(output)
-
-
-cli.add_command(edit, "e")
+    print(output)
 
 
 @cli.command()
-@click.argument("indexes", default=None, required=False)
-@click.pass_context
-def delete(ctx, indexes):
-    "Delete a node (if no node provided, delete the last one)."
+@cli.command(name="prompt", hidden=True)
+def edit_prompt(ctx: Context, index: Annotated[Optional[str], Argument()] = None):
+    """(prompt) Export the full prompt to an editor for saving."""
+    input = str(ctx.obj.tree.prompt)
+    click.edit(input)
 
+
+@cli.command()
+@cli.command(name="del", hidden=True)
+def delete(ctx: Context, indexes: Annotated[Optional[str], Argument()] = None):
+    "(del) delete some nodes (space separated) (last one by default)"
     if not indexes:
         indexes = [ctx.obj.tree.index.path[-1].index]
     else:
-        indexes = indexes.split(",")
+        indexes = indexes.split(" ")
 
     for index in indexes:
         ctx.obj.tree.index.delete(int(index))
 
 
-cli.add_command(delete, "del")
-
-
 @cli.command()
-@click.argument("indexes", default=None)
-@click.pass_context
-def cherry_pick(ctx, indexes):
-    "Copy nodes onto the current branch (can be indexes or tags)"
-    indexes = [int(index) if index.isdigit() else index for index in indexes.split(",")]
+@cli.command(name="cp", hidden=True)
+def cherry_pick(ctx: Context, indexes: str):
+    "(cp) Copy nodes onto the current branch (can be indexes or tags, space separated)"
+    indexes = [int(index) if index.isdigit() else index for index in indexes.split(" ")]
     ctx.obj.tree.index.cherry_pick(indexes)
 
-
-cli.add_command(cherry_pick, "cp")
-
-
-@click.pass_context
-def default(ctx, args):
-    """Default command"""
-    ctx.invoke(send, msg=args)
-
-
-cli.shell.default = default
 
 # @staticmethod
 # def context(_, command_params, tree):

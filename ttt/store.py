@@ -3,8 +3,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-from ttt.config import Config, click, shell
+from rich import print
+from typer import Argument, Context
+from typing_extensions import Annotated
+
 from ttt.tree import DummyTree, Tree
+
+from .typer_shell import make_typer_shell
 
 
 @dataclass
@@ -15,14 +20,13 @@ class Store:
     This handles the vector db, plus exporting/importing to disk.
     """
 
-    config: Optional["Config"] = None  # type: ignore
-
+    config: Optional["Config"] = None
     chat_path: Path = Path("~/.config/ttt/chats/").expanduser()
 
     def __post_init__(self):
-        if self.config and self.config.get("chat_path", None):
-            self.chat_path = Path(self.config["chat_path"]).expanduser()
-            self.chat_file = self.chat_path / f"{Path(self.config['chat_name'])}.json"
+        if self.config and self.config._dict.get("chat_path", None):
+            self.chat_path = Path(self.config._dict["chat_path"]).expanduser()
+            self.chat_file = self.chat_path / f"{Path(self.config._dict['chat_name'])}.json"
 
     def dump(self):
         if self.chat_file.exists():
@@ -35,35 +39,40 @@ class Store:
 
     def _list_dir(self):
         files = [x for x in self.chat_path.glob("*.json")]
-        click.echo(f"Found {len(files)} chats.")
+        print(f"Found {len(files)} chats.")
         summaries = [json.loads(x.read_text()).get("summary", None) for x in files]
         for file, summary in zip(files, summaries):
             summary = summary or "No summary"
-            click.echo(f"{file.stem}: {summary:100}")
+            print(f"{file.stem}: {summary:100}")
 
     def list_db_docs(self):
         if not self.db:
             return
 
-        click.echo(f"Found {len(self.db.documents)} documents.")
+        print(f"Found {len(self.db.documents)} documents.")
         for doc in self.db.documents:
-            click.echo(f"{doc['name']}: {doc['summary']}")
+            print(f"{doc['name']}: {doc['summary']}")
 
     def load_file(self):
-        if self.config["file"]:
+        if self.config._dict["file"]:
             return Tree(self.chat_file)
         return DummyTree()
 
-    @staticmethod
-    @click.command()
-    @click.option("--toggle_file", "-t", help="Set file mode on/off", is_flag=True, default=False)
-    @click.option("--default_file", "-d", help="Set default file.", default="")
-    @click.option("--list", "-l", help="List available files.", is_flag=True, default=False)
-    @click.option("--dump", "-D", help="Dump default chat file.", is_flag=True, default=False)
-    def file(toggle_file, default_file, list, dump):
-        config = Config.check_config()
-        Config.check_file(toggle_file, default_file, config)
-        if list:
-            Store(config=config).list_files()
-        if dump:
-            click.echo(Store(config=config).dump())
+
+cli = make_typer_shell(prompt="💾: ", intro="Welcome to the Store! Type help or ? to list commands.")
+
+
+@cli.command()
+def file(
+    ctx: Context,
+    default_file: Annotated[Optional[str], Argument()] = None,
+    toggle: bool = False,
+    list: bool = False,
+    dump: bool = False,
+):
+    config = ctx.obj.config
+    config.check_file(toggle, default_file, config)
+    if list:
+        Store(config=config).list_files()
+    if dump:
+        print(Store(config=config).dump())

@@ -40,8 +40,8 @@ repos:
     hooks:
     - id: seed-isort-config
 
-  - repo: https://github.com/ambv/black
-    rev: 22.3.0
-    hooks:
-    - id: black
-      args: ['--line-length=120']
+  # - repo: https://github.com/ambv/black
+  #   rev: 22.3.0
+  #   hooks:
+  #   - id: black
+  #     args: ['--line-length=120']
