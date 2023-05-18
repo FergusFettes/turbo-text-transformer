@@ -8,7 +8,6 @@ from typing import Optional
 import openai
 import rich
 import typer
-from langchain.llms import OpenAI
 from rich import print
 from rich.live import Live
 from rich.table import Table
@@ -18,7 +17,7 @@ from typing_extensions import Annotated
 from ttt.config import Config
 from ttt.io import IO
 from ttt.store import Store
-# from ttt.templater import Templater
+from ttt.templater import Templater
 from ttt.typer_shell import make_typer_shell
 
 
@@ -29,27 +28,29 @@ class App:
 
     def __post_init__(self):
         self.config = Config.check_config()
+        self.openai_config = Config.load_openai_config()
         self.store = Store(config=self.config)
-        # self.templater = Templater(config=self.config)
+        self.templater = Templater(config=self.config)
         self.io = IO
         self.tree = self.store.load_file()
-        self.params = Config.load_openai_config()["engine_params"]
+        self.params = self.openai_config["engine_params"]
         self.tree.params = self.params
 
     @staticmethod
-    def simple_gen(params):
+    def simple_gen(config, params):
         if params["model"] == "test":
             return params["prompt"]
         App.max_tokens(params)
         if params["model"] == "code-davinci-002":
-            prompt = params["prompt"]
-            del params["prompt"]
-            params["openai_api_base"] = os.environ.get("CD2_URL")
-            params["openai_api_key"] = os.environ.get("CD2_KEY")
-            llm = OpenAI(**params)
-            responses = llm.generate([prompt])
-            return [generation.text for generation in responses[0]]
+            if "cd2_base" not in config or "cd2_key" not in config:
+                raise typer.Exit("Please set cd2_base and cd2_key in your config file")
+            openai.api_base = config.get("cd2_base")
+            openai.api_key = config.get("cd2_key")
+            params["stream"] = False
         generations, choice = OAIGen.gen(params)
+        if params["model"] == "code-davinci-002":
+            openai.api_key = config.get("api_key")
+            openai.api_base = config.get("api_base", "https://api.openai.com/v1")
 
         for i, gen in generations.items():
             if gen.startswith("\n"):

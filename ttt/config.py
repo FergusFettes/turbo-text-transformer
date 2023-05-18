@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
+import openai
 import tiktoken
 import tttp
 import typer
@@ -123,6 +124,9 @@ class Config:
         if not path.exists():
             return {}
         oaiconfig = yaml.load(path.read_text(), Loader=yaml.Loader)
+        openai.api_key = oaiconfig.get("api_key")
+        openai.api_base = oaiconfig.get("api_base", "https://api.openai.com/v1")
+
         return oaiconfig
 
     @staticmethod
