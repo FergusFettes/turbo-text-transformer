@@ -4,7 +4,7 @@ from ttt.app import App
 from ttt.app import cli as app_cli
 from ttt.config import cli as config_cli
 from ttt.store import cli as store_cli
-# from ttt.templater import cli as templater_cli
+from ttt.templater import cli as templater_cli
 from ttt.tree import cli as tree_cli
 
 from .typer_shell import make_typer_shell
@@ -41,7 +41,8 @@ main.add_typer(tree_cli, name="t", hidden=True)
 tree_cli.add_typer(app_cli, name="params", help="(p) Model params.")
 tree_cli.add_typer(app_cli, name="p", hidden=True)
 
-# main.add_command(templater_cli, "template")
-# main.add_command(templater_cli, "tr")
-# tree_cli.add_command(templater_cli, "template")
-# tree_cli.add_command(templater_cli, "tr")
+main.add_typer(templater_cli, name="template", help="(tr) Templater.")
+main.add_typer(templater_cli, name="tr", hidden=True)
+
+tree_cli.add_typer(templater_cli, name="template", help="(tr) Templater.")
+tree_cli.add_typer(templater_cli, name="tr", hidden=True)

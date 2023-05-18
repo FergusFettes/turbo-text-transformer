@@ -1,7 +1,7 @@
 import shutil
 from copy import deepcopy
 from dataclasses import dataclass
-from functools import partial
+# from functools import partial
 from pathlib import Path
 from typing import List, Optional
 
@@ -232,7 +232,7 @@ def display(
     type: Annotated[Optional[str], Argument()] = "p",
     index: Annotated[Optional[str], Argument()] = None,
 ):
-    """(d, p, t) Various display options (check help).\n
+    """(d, p, t) Various display options (check helpgg).\n
     Types:\n
         \ttree/t: display the tree structure\n
         \tall/a: display the full tree including other roots\n

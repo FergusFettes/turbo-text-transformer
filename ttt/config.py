@@ -174,6 +174,10 @@ class Config:
             value = int(value)
         elif value[1:].replace(".", "").isdigit():
             value = float(value)
+
+        if key == "template_file":
+            if not value.endswith(".j2"):
+                value = value + ".j2"
         dict.update({key: value})
 
     @staticmethod
@@ -215,14 +219,14 @@ def reinit(ctx: Context):
 @cli.command(name="print")
 @cli.command(name="p", hidden=True)
 def _print(ctx: Context):
-    "Print the current config."
+    "(p) Print the current config."
     print(ctx.obj.config._dict)
 
 
 @cli.command()
 @cli.command(name="s", hidden=True)
 def save(ctx: Context):
-    "Save the current config to the config file."
+    "(s) Save the current config to the config file."
     ctx.obj.config.save()
 
 
@@ -234,7 +238,7 @@ def update(
     value: Annotated[Optional[str], Argument()] = None,
     kv: Annotated[Optional[str], Argument()] = None,
 ):
-    "Update a config value, or set of values. (kv in the form of 'name1=value1,name2=value2')"
+    "(u) Update a config value, or set of values. (kv in the form of 'name1=value1,name2=value2')"
     if kv:
         updates = kv.split(",")
         for kv in updates:
